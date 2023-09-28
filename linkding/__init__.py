@@ -35,7 +35,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
             id=md_id,
             name=md_name,
             description=md_description,
-            defaultTrigger='#'
+            defaultTrigger='ld '
         )
         PluginInstance.__init__(self, extensions=[self])
 
@@ -152,6 +152,8 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
                     actions=[
                         Action("open", "Open article", lambda u=article["url"]: openUrl(u)),
                         Action("copy", "Copy URL to clipboard", lambda u=article["url"]: setClipboardText(u)),
+                        Action("archive", "Archive article", lambda u=article["id"]: self.archive_link(u)),
+                        Action("delete", "Delete article", lambda u=article["id"]: self.archive_link(u)),
                     ],
                 )
 
@@ -190,7 +192,26 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         self.cache_timeout = datetime.now() + timedelta(minutes=self._cache_length)
         return self.write_cache([item for item in results])
 
-    
+    def delete_link(self, link_id: str):
+        url = f"{self._instance_url}/api/bookmarks/{link_id}"
+        headers = {"User-Agent": self.user_agent, "Authorization": f"Token {self._api_key}"}
+        debug("About to DELETE {}".format(url))
+        response = requests.delete(url, headers=headers)
+        if response.ok:
+            self.refresh_cache()
+        else:
+            warning("Got response {}".format(response))
+
+
+    def archive_link(self, link_id: str):
+        url = f"{self._instance_url}/api/bookmarks/{link_id}/archive/"
+        headers = {"User-Agent": self.user_agent, "Authorization": f"Token {self._api_key}"}
+        debug("About to POST {}".format(url))
+        response = requests.post(url, headers=headers)
+        if response.ok:
+            self.refresh_cache()
+        else:
+            warning("Got response {}".format(response))
 
     def read_cache(self):
         with self.cache_file.open("r") as cache:
