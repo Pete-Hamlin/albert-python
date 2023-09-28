@@ -1,9 +1,11 @@
+import json
 from datetime import datetime, timedelta
-import requests
 from pathlib import Path
 from time import sleep
-from albert import *
 from urllib import parse
+
+import requests
+from albert import *
 
 md_iid = "2.1"
 md_version = "2.0"
@@ -33,6 +35,11 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
         self._instance_url = self.readConfig("instance_url", str) or "http://localhost:9090"
         self._api_key = self.readConfig("api_key", str) or ""
+        self._cache_results = self.readConfig("cache_results", bool) or True
+        self._cache_length = self.readConfig("cache_length", int) or 60
+
+        self.cache_timeout = datetime.now()
+        self.cache_file = self.cacheLocation / "linkding.json"
 
     @property
     def instance_url(self):
@@ -52,6 +59,28 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         self._api_key = value
         self.writeConfig("api_key", value)
 
+    @property
+    def cache_results(self):
+        return self._cache_results
+
+    @cache_results.setter
+    def cache_results(self, value):
+        self._cache_results = value
+        if not self._cache_results:
+            # Cleanup cache file
+            self.cache_file.unlink(missing_ok=True)
+        self.writeConfig("cache_results", value)
+
+    @property
+    def cache_length(self):
+        return self._cache_length
+
+    @cache_length.setter
+    def cache_length(self, value):
+        self._cache_length = value
+        self.cache_timeout = datetime.now()
+        self.writeConfig("cache_length", value)
+
     def configWidget(self):
         return [
             {"type": "lineedit", "property": "instance_url", "label": "URL"},
@@ -61,6 +90,8 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 "label": "API key",
                 "widget_properties": {"echoMode": "Password"},
             },
+            {"type": "checkbox", "property": "cache_results", "label": "Cache results locally"},
+            {"type": "spinbox", "property": "cache_length", "label": "Cache length (minutes)"},
         ]
 
     def handleTriggerQuery(self, query):
@@ -75,7 +106,6 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             data = self.get_results()
             articles = (item for item in data if stripped in self.create_filters(item))
             items = [item for item in self.gen_items(articles)]
-            print(items)
             query.add(items)
 
         else:
@@ -84,19 +114,19 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     id=md_id, text=md_name, subtext="Search for an article saved via Linkding", iconUrls=self.iconUrls
                 )
             )
-        #    query.add(
-        #         StandardItem(
-        #             id=md_id, text="Refresh cache", subtext="Refresh cached articles", iconUrls=self.iconUrls
-        #         )
-        #     )
+            if self._cache_results:
+               query.add(
+                    StandardItem(
+                        id=md_id, text="Refresh cache", subtext="Refresh cached articles", iconUrls=self.iconUrls, actions=[Action("refresh", "Refresh article cache", lambda: self.refresh_cache())]
+                    )
+                )
 
     def create_filters(self, item: dict):
-        # TODO: Add filter options?ld 
+        # TODO: Add filter options?
         return ",".join([item["url"], item["title"], ",".join(tag for tag in item["tag_names"])])
 
     def gen_items(self, articles: object):
             for article in articles:
-                print(article)
                 yield StandardItem(
                     id=md_id,
                     text=article["title"] or article['url'],
@@ -109,6 +139,8 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 )
 
     def get_results(self):
+        if self._cache_results:
+            return self._get_cached_results()
         return self.fetch_results()
 
     def fetch_results(self):
@@ -127,3 +159,27 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             else:
                 warning(f"Got response {response.status_code} querying {url}")
 
+    def _get_cached_results(self):
+        if self.cache_file.is_file() and self.cache_timeout >= datetime.now():
+            debug("Cache hit")
+            results = self.read_cache()
+            return (item for item in results)
+        # Cache miss
+        debug("Cache miss")
+        return self.refresh_cache()
+    
+    def refresh_cache(self):
+        results = self.fetch_results()
+        self.cache_timeout = datetime.now() + timedelta(minutes=self._cache_length)
+        return self.write_cache([item for item in results])
+
+    
+
+    def read_cache(self):
+        with self.cache_file.open("r") as cache:
+           return json.load(cache) 
+
+    def write_cache(self, data: list[dict]):
+        with self.cache_file.open("w") as cache:
+            cache.write(json.dumps(data))
+        return (item for item in data)
