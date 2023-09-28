@@ -17,7 +17,7 @@ md_maintainers = ["@Pete-Hamlin"]
 md_lib_dependencies = ["requests"]
 
 
-class Plugin(PluginInstance, TriggerQueryHandler):
+class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
     iconUrls = [f"file:{Path(__file__).parent}/linkding.png"]
     limit = 20
     user_agent = "org.albert.linkding"
@@ -30,6 +30,12 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             description=md_description,
             synopsis="<article-name>",
             defaultTrigger="ld ",
+        )
+        GlobalQueryHandler.__init__(self,
+            id=md_id,
+            name=md_name,
+            description=md_description,
+            defaultTrigger='#'
         )
         PluginInstance.__init__(self, extensions=[self])
 
@@ -120,6 +126,17 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                         id=md_id, text="Refresh cache", subtext="Refresh cached articles", iconUrls=self.iconUrls, actions=[Action("refresh", "Refresh article cache", lambda: self.refresh_cache())]
                     )
                 )
+               
+    def handleGlobalQuery(self, query):
+        stripped = query.string.strip()
+        if stripped and self.cache_file:
+            # If we have results cached display these, otherwise disregard (we don't want to make fetch requests in the global query)
+            data = (item for item in self.read_cache())
+            articles = (item for item in data if stripped in self.create_filters(item))
+            items = [RankItem(item=item, score=0) for item in self.gen_items(articles)]
+            return items
+
+
 
     def create_filters(self, item: dict):
         # TODO: Add filter options?
