@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from time import sleep
 from urllib import parse
+from threading import Thread
 
 import requests
 from albert import *
@@ -20,7 +21,7 @@ md_lib_dependencies = ["requests"]
 
 class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
     iconUrls = [f"file:{Path(__file__).parent}/paperless.png"]
-    limit = 50
+    limit = 100
     headers = {"User-Agent": "org.albert.paperless"}
 
     def __init__(self):
@@ -46,12 +47,18 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
         self._cache_results = self.readConfig("cache_results", bool) or True
         self._cache_length = self.readConfig("cache_length", int) or 60
+        self._auto_cache = self.readConfig("auto_cache", bool) or False
 
         self.cache_timeout = datetime.now()
         self.cache_file = self.cacheLocation / "paperless.json"
 
         self.tag_file = self.dataLocation / "paperless-tags.json"
         self.type_file = self.dataLocation / "paperless-types.json"
+
+        if self._auto_cache:
+            debug("Fetching initial paperless cache")
+            thread = Thread(target=self.refresh_cache, daemon=True)
+            thread.start()
 
     @property
     def instance_url(self):
@@ -112,6 +119,15 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         self.writeConfig("cache_length", value)
 
     @property
+    def cache_on_start(self):
+        return self._auto_cache
+
+    @cache_results.setter
+    def cache_on_start(self, value):
+        self._auto_cache = value
+        self.writeConfig("auto_cache", value)
+
+    @property
     def filter_by_tags(self):
         return self._filter_by_tags
 
@@ -162,6 +178,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
             {"type": "checkbox", "property": "filter_by_body", "label": "Filter by document body"},
             {"type": "checkbox", "property": "cache_results", "label": "Cache results locally"},
             {"type": "spinbox", "property": "cache_length", "label": "Cache length (minutes)"},
+            {"type": "checkbox", "property": "cache_on_start", "label": "Cache results on startup"},
         ]
 
     def handleTriggerQuery(self, query):
@@ -317,6 +334,11 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         results = self.fetch_documents()
         self.cache_timeout = datetime.now() + timedelta(minutes=self._cache_length)
         return self.write_file(self.cache_file, [item for item in results])
+
+    def auto_cache(self):
+        while True:
+            self.refresh_cache()
+            sleep(3600)
 
     def refresh_tags(self):
         return self.write_file(self.tag_file, [tag for tag in self.fetch_tags()])
