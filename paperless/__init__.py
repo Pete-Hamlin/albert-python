@@ -53,11 +53,11 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         self.cache_file = self.cacheLocation / "paperless.json"
 
         self.tag_file = self.dataLocation / "paperless-tags.json"
-        self.type_file = self.dataLocation / "paperless-types.json"
+        self.type_file = self.dataLocation / " iconspaperless-types.json"
 
-        if self._auto_cache:
+        if self._cache_results and self._auto_cache:
             debug("Fetching initial paperless cache")
-            thread = Thread(target=self.refresh_cache, daemon=True)
+            thread = Thread(target=self.cache_routine, daemon=True)
             thread.start()
 
     @property
@@ -119,11 +119,11 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         self.writeConfig("cache_length", value)
 
     @property
-    def cache_on_start(self):
+    def auto_cache(self):
         return self._auto_cache
 
     @cache_results.setter
-    def cache_on_start(self, value):
+    def auto_cache(self, value):
         self._auto_cache = value
         self.writeConfig("auto_cache", value)
 
@@ -178,7 +178,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
             {"type": "checkbox", "property": "filter_by_body", "label": "Filter by document body"},
             {"type": "checkbox", "property": "cache_results", "label": "Cache results locally"},
             {"type": "spinbox", "property": "cache_length", "label": "Cache length (minutes)"},
-            {"type": "checkbox", "property": "cache_on_start", "label": "Cache results on startup"},
+            {"type": "checkbox", "property": "auto_cache", "label": "Periodically cache documents"},
         ]
 
     def handleTriggerQuery(self, query):
@@ -206,7 +206,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
                         id=md_id,
                         text="Refresh cache",
                         subtext="Refresh cached documents",
-                        iconUrls=self.iconUrls,
+                        iconUrls=["xdg:view-refresh"],
                         actions=[Action("refresh", "Refresh document cache", lambda: self.refresh_cache())],
                     )
                 )
@@ -335,7 +335,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         self.cache_timeout = datetime.now() + timedelta(minutes=self._cache_length)
         return self.write_file(self.cache_file, [item for item in results])
 
-    def auto_cache(self):
+    def cache_routine(self):
         while True:
             self.refresh_cache()
             sleep(3600)

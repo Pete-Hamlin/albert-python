@@ -4,6 +4,7 @@ from pathlib import Path
 from time import sleep
 from urllib import parse
 
+from threading import Thread
 import requests
 from albert import *
 
@@ -19,7 +20,7 @@ md_lib_dependencies = ["requests"]
 
 class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
     iconUrls = [f"file:{Path(__file__).parent}/linkding.png"]
-    limit = 20
+    limit = 50
     user_agent = "org.albert.linkding"
 
     def __init__(self):
@@ -38,9 +39,15 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         self._api_key = self.readConfig("api_key", str) or ""
         self._cache_results = self.readConfig("cache_results", bool) or True
         self._cache_length = self.readConfig("cache_length", int) or 60
+        self._auto_cache = self.readConfig("auto_cache", bool) or False
 
         self.cache_timeout = datetime.now()
         self.cache_file = self.cacheLocation / "linkding.json"
+
+        if self._cache_results and self._auto_cache:
+            debug("Fetching initial linkding cache")
+            thread = Thread(target=self.cache_routine, daemon=True)
+            thread.start()
 
     @property
     def instance_url(self):
@@ -82,6 +89,15 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         self.cache_timeout = datetime.now()
         self.writeConfig("cache_length", value)
 
+    @property
+    def auto_cache(self):
+        return self._auto_cache
+
+    @cache_results.setter
+    def auto_cache(self, value):
+        self._auto_cache = value
+        self.writeConfig("auto_cache", value)
+
     def configWidget(self):
         return [
             {"type": "lineedit", "property": "instance_url", "label": "URL"},
@@ -93,6 +109,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
             },
             {"type": "checkbox", "property": "cache_results", "label": "Cache results locally"},
             {"type": "spinbox", "property": "cache_length", "label": "Cache length (minutes)"},
+            {"type": "checkbox", "property": "auto_cache", "label": "Periodically cache articles"},
         ]
 
     def handleTriggerQuery(self, query):
@@ -182,6 +199,11 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         # Cache miss
         debug("Cache miss")
         return self.refresh_cache()
+
+    def cache_routine(self):
+        while True:
+            self.refresh_cache()
+            sleep(3600)
 
     def refresh_cache(self):
         results = self.fetch_results()
