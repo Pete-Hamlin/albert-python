@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from time import sleep
 from urllib import parse
+from threading import Thread
 
 import requests
 from albert import *
@@ -46,7 +47,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
         self._cache_results = self.readConfig("cache_results", bool) or True
         self._cache_length = self.readConfig("cache_length", int) or 60
-        self._cache_on_start = self.readConfig("cache_on_start", bool) or False
+        self._auto_cache = self.readConfig("auto_cache", bool) or False
 
         self.cache_timeout = datetime.now()
         self.cache_file = self.cacheLocation / "paperless.json"
@@ -54,9 +55,10 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         self.tag_file = self.dataLocation / "paperless-tags.json"
         self.type_file = self.dataLocation / "paperless-types.json"
 
-        if self._cache_on_start:
+        if self._auto_cache:
             debug("Fetching initial paperless cache")
-            self.refresh_cache()
+            thread = Thread(target=self.refresh_cache, daemon=True)
+            thread.start()
 
     @property
     def instance_url(self):
@@ -118,12 +120,12 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
     @property
     def cache_on_start(self):
-        return self._cache_on_start
+        return self._auto_cache
 
     @cache_results.setter
     def cache_on_start(self, value):
-        self._cache_on_start = value
-        self.writeConfig("cache_on_start", value)
+        self._auto_cache = value
+        self.writeConfig("auto_cache", value)
 
     @property
     def filter_by_tags(self):
@@ -332,6 +334,11 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         results = self.fetch_documents()
         self.cache_timeout = datetime.now() + timedelta(minutes=self._cache_length)
         return self.write_file(self.cache_file, [item for item in results])
+
+    def auto_cache(self):
+        while True:
+            self.refresh_cache()
+            sleep(3600)
 
     def refresh_tags(self):
         return self.write_file(self.tag_file, [tag for tag in self.fetch_tags()])
