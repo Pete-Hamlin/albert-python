@@ -2,9 +2,9 @@ import json
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+from threading import Thread
 from time import sleep
 from urllib import parse
-from threading import Thread
 
 import requests
 from albert import *
@@ -264,9 +264,11 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
     def download_document(self, url: str):
         response = requests.get(url, timeout=5, auth=(self._username, self._password))
         if response.ok:
-            header = response.headers.get("Content-Disposition").split("filename=")[1] or "albert_paperless_dl.pdf"
-            local_file = Path(self._download_path) / header.replace('"', "")
-            with local_file.open("w") as dl_file:
+            header = (
+                response.headers.get("Content-Disposition").split("'")[1].replace(" ", "_") or "albert_paperless_dl.pdf"
+            )
+            local_file = Path(self._download_path).expanduser() / header
+            with local_file.open(mode="wb") as dl_file:
                 for chunk in response.iter_content(chunk_size=8192):
                     dl_file.write(chunk)
             os.system(f"xdg-open '{local_file}'")
