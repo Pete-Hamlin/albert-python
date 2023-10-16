@@ -31,12 +31,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
             synopsis="<article-name>",
             defaultTrigger="ld ",
         )
-        GlobalQueryHandler.__init__(self,
-            id=md_id,
-            name=md_name,
-            description=md_description,
-            defaultTrigger='ld '
-        )
+        GlobalQueryHandler.__init__(self, id=md_id, name=md_name, description=md_description, defaultTrigger="ld ")
         PluginInstance.__init__(self, extensions=[self])
 
         self._instance_url = self.readConfig("instance_url", str) or "http://localhost:9090"
@@ -113,7 +108,6 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
             articles = (item for item in data if stripped in self.create_filters(item))
             items = [item for item in self.gen_items(articles)]
             query.add(items)
-
         else:
             query.add(
                 StandardItem(
@@ -121,41 +115,43 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
                 )
             )
             if self._cache_results:
-               query.add(
+                query.add(
                     StandardItem(
-                        id=md_id, text="Refresh cache", subtext="Refresh cached articles", iconUrls=self.iconUrls, actions=[Action("refresh", "Refresh article cache", lambda: self.refresh_cache())]
+                        id=md_id,
+                        text="Refresh cache",
+                        subtext="Refresh cached articles",
+                        iconUrls=self.iconUrls,
+                        actions=[Action("refresh", "Refresh article cache", lambda: self.refresh_cache())],
                     )
                 )
-               
+
     def handleGlobalQuery(self, query):
         stripped = query.string.strip()
-        if stripped and self.cache_file:
+        if stripped and self.cache_file.is_file():
             # If we have results cached display these, otherwise disregard (we don't want to make fetch requests in the global query)
             data = (item for item in self.read_cache())
             articles = (item for item in data if stripped in self.create_filters(item))
             items = [RankItem(item=item, score=0) for item in self.gen_items(articles)]
             return items
 
-
-
     def create_filters(self, item: dict):
         # TODO: Add filter options?
         return ",".join([item["url"], item["title"], ",".join(tag for tag in item["tag_names"])])
 
     def gen_items(self, articles: object):
-            for article in articles:
-                yield StandardItem(
-                    id=md_id,
-                    text=article["title"] or article['url'],
-                    subtext="{}: {}".format(",".join(tag for tag in article["tag_names"]), article["url"]),
-                    iconUrls=self.iconUrls,
-                    actions=[
-                        Action("open", "Open article", lambda u=article["url"]: openUrl(u)),
-                        Action("copy", "Copy URL to clipboard", lambda u=article["url"]: setClipboardText(u)),
-                        Action("archive", "Archive article", lambda u=article["id"]: self.archive_link(u)),
-                        Action("delete", "Delete article", lambda u=article["id"]: self.archive_link(u)),
-                    ],
-                )
+        for article in articles:
+            yield StandardItem(
+                id=md_id,
+                text=article["title"] or article["url"],
+                subtext="{}: {}".format(",".join(tag for tag in article["tag_names"]), article["url"]),
+                iconUrls=self.iconUrls,
+                actions=[
+                    Action("open", "Open article", lambda u=article["url"]: openUrl(u)),
+                    Action("copy", "Copy URL to clipboard", lambda u=article["url"]: setClipboardText(u)),
+                    Action("archive", "Archive article", lambda u=article["id"]: self.archive_link(u)),
+                    Action("delete", "Delete article", lambda u=article["id"]: self.archive_link(u)),
+                ],
+            )
 
     def get_results(self):
         if self._cache_results:
@@ -167,7 +163,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         headers = {"User-Agent": self.user_agent, "Authorization": f"Token {self._api_key}"}
         url = f"{self._instance_url}/api/bookmarks/?{parse.urlencode(params)}"
         return (article for article_list in self.get_articles(url, headers) for article in article_list)
-    
+
     def get_articles(self, url: str, headers: dict):
         while url:
             response = requests.get(url, headers=headers, timeout=5)
@@ -186,7 +182,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         # Cache miss
         debug("Cache miss")
         return self.refresh_cache()
-    
+
     def refresh_cache(self):
         results = self.fetch_results()
         self.cache_timeout = datetime.now() + timedelta(minutes=self._cache_length)
@@ -202,7 +198,6 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         else:
             warning("Got response {}".format(response))
 
-
     def archive_link(self, link_id: str):
         url = f"{self._instance_url}/api/bookmarks/{link_id}/archive/"
         headers = {"User-Agent": self.user_agent, "Authorization": f"Token {self._api_key}"}
@@ -215,7 +210,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
     def read_cache(self):
         with self.cache_file.open("r") as cache:
-           return json.load(cache) 
+            return json.load(cache)
 
     def write_cache(self, data: list[dict]):
         with self.cache_file.open("w") as cache:
