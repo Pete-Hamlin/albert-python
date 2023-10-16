@@ -20,7 +20,7 @@ md_lib_dependencies = ["requests"]
 
 class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
     iconUrls = [f"file:{Path(__file__).parent}/paperless.png"]
-    limit = 50
+    limit = 100
     headers = {"User-Agent": "org.albert.paperless"}
 
     def __init__(self):
@@ -46,12 +46,17 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
         self._cache_results = self.readConfig("cache_results", bool) or True
         self._cache_length = self.readConfig("cache_length", int) or 60
+        self._cache_on_start = self.readConfig("cache_on_start", bool) or False
 
         self.cache_timeout = datetime.now()
         self.cache_file = self.cacheLocation / "paperless.json"
 
         self.tag_file = self.dataLocation / "paperless-tags.json"
         self.type_file = self.dataLocation / "paperless-types.json"
+
+        if self._cache_on_start:
+            debug("Fetching initial paperless cache")
+            self.refresh_cache()
 
     @property
     def instance_url(self):
@@ -112,6 +117,15 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         self.writeConfig("cache_length", value)
 
     @property
+    def cache_on_start(self):
+        return self._cache_on_start
+
+    @cache_results.setter
+    def cache_on_start(self, value):
+        self._cache_on_start = value
+        self.writeConfig("cache_on_start", value)
+
+    @property
     def filter_by_tags(self):
         return self._filter_by_tags
 
@@ -162,6 +176,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
             {"type": "checkbox", "property": "filter_by_body", "label": "Filter by document body"},
             {"type": "checkbox", "property": "cache_results", "label": "Cache results locally"},
             {"type": "spinbox", "property": "cache_length", "label": "Cache length (minutes)"},
+            {"type": "checkbox", "property": "cache_on_start", "label": "Cache results on startup"},
         ]
 
     def handleTriggerQuery(self, query):
