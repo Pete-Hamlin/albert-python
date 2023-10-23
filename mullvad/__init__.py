@@ -159,4 +159,6 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
     def handleGlobalQuery(self, query):
         if query.string.strip():
-            return [RankItem(item=item, score=0) for item in self.actions()]
+            return [
+                RankItem(item=item, score=0) for item in self.actions() if query.string.lower() in item.text.lower()
+            ]
