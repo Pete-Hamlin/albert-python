@@ -143,7 +143,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
                         id=md_id,
                         text="Refresh cache",
                         subtext="Refresh cached articles",
-                        iconUrls=self.iconUrls,
+                        iconUrls=["xdg:view-refresh"],
                         actions=[Action("refresh", "Refresh article cache", lambda: self.refresh_cache())],
                     )
                 )
