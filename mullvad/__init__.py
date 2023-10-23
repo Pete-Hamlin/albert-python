@@ -16,7 +16,7 @@ md_credits = ["@janeklb", "@Bierchermuesli"]
 md_bin_dependencies = ["mullvad"]
 
 
-class Plugin(PluginInstance, TriggerQueryHandler):
+class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
     VPNConnection = namedtuple("VPNConnection", ["name", "connected"])
     iconUrls = ["xdg:network-wired"]
     blockedIcon = ["file:{}".format(Path(__file__).parent / "lock-10.png")]
@@ -32,6 +32,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             synopsis="<article-name>",
             defaultTrigger="mullvad ",
         )
+        GlobalQueryHandler.__init__(self, id=md_id, name=md_name, description=md_description, defaultTrigger="mullvad ")
         PluginInstance.__init__(self, extensions=[self])
 
         self.connection_regex = re.compile(r"[a-z]{2}-[a-z]*-[a-z]{2,4}-[\d]{2,3}")
@@ -155,3 +156,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 )
             else:
                 query.add(self.defaultItems())
+
+    def handleGlobalQuery(self, query):
+        if query.string.strip():
+            return [RankItem(item=item, score=0) for item in self.actions()]
