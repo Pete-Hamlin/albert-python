@@ -50,11 +50,12 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         self.thread_stop = Event()
         self.cache_thread = Thread(target=self.cache_routine, daemon=True)
 
+        if not self._auto_cache:
+            self.thread_stop.set()
+
         self.token = None
 
-        if self._cache_results and self._auto_cache:
-            debug("Fetching initial wallabag cache")
-            self.cache_thread.start()
+        self.cache_thread.start()
 
     @property
     def instance_url(self):
@@ -127,12 +128,11 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
     def auto_cache(self):
         return self._auto_cache
 
-    @cache_results.setter
+    @auto_cache.setter
     def auto_cache(self, value):
         self._auto_cache = value
         if self._auto_cache and self._cache_results:
             self.thread_stop.clear()
-            self.cache_thread.start()
         else:
             self.thread_stop.set()
         self.writeConfig("auto_cache", value)
@@ -255,9 +255,8 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
     def cache_routine(self):
         while True:
-            if self.thread_stop.is_set():
-                break
-            self.refresh_cache()
+            if not self.thread_stop.is_set():
+                self.refresh_cache()
             sleep(3600)
 
     def refresh_cache(self):

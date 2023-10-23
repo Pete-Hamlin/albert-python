@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
 from time import sleep
 from urllib import parse
 
@@ -51,14 +51,16 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
         self.cache_timeout = datetime.now()
         self.cache_file = self.cacheLocation / "paperless.json"
+        self.cache_thread = Thread(target=self.cache_routine, daemon=True)
+        self.thread_stop = Event()
+
+        if not self._auto_cache:
+            self.thread_stop.set()
 
         self.tag_file = self.dataLocation / "paperless-tags.json"
         self.type_file = self.dataLocation / " iconspaperless-types.json"
 
-        if self._cache_results and self._auto_cache:
-            debug("Fetching initial paperless cache")
-            thread = Thread(target=self.cache_routine, daemon=True)
-            thread.start()
+        self.cache_thread.start()
 
     @property
     def instance_url(self):
@@ -122,9 +124,13 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
     def auto_cache(self):
         return self._auto_cache
 
-    @cache_results.setter
+    @auto_cache.setter
     def auto_cache(self, value):
         self._auto_cache = value
+        if self._auto_cache and self._cache_results:
+            self.thread_stop.clear()
+        else:
+            self.thread_stop.set()
         self.writeConfig("auto_cache", value)
 
     @property
@@ -339,7 +345,8 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
     def cache_routine(self):
         while True:
-            self.refresh_cache()
+            if not self.thread_stop.is_set():
+                self.refresh_cache()
             sleep(3600)
 
     def refresh_tags(self):
@@ -350,12 +357,16 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
     def fetch_request(self, url: str):
         while url:
-            debug(f"GET request to {url}")
-            response = requests.get(url, headers=self.headers, timeout=5, auth=(self._username, self._password))
-            debug(f"Got response {response.status_code}")
-            if response.ok:
-                result = response.json()
-                url = result["next"]
-                yield result["results"]
-            else:
-                warning(f"Got response {response.status_code} querying {url}")
+            try:
+                debug(f"GET request to {url}")
+                response = requests.get(url, headers=self.headers, timeout=5, auth=(self._username, self._password))
+                debug(f"Got response {response.status_code}")
+                if response.ok:
+                    result = response.json()
+                    url = result["next"]
+                    yield result["results"]
+                else:
+                    warning(f"Got response {response.status_code} querying {url}")
+            except (requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout):
+                warning(f"Connection timed out for {url} - exiting")
+                break

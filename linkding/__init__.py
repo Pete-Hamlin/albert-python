@@ -1,10 +1,10 @@
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
+from threading import Event, Thread
 from time import sleep
 from urllib import parse
 
-from threading import Thread
 import requests
 from albert import *
 
@@ -43,11 +43,13 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
         self.cache_timeout = datetime.now()
         self.cache_file = self.cacheLocation / "linkding.json"
+        self.cache_thread = Thread(target=self.cache_routine, daemon=True)
+        self.thread_stop = Event()
 
-        if self._cache_results and self._auto_cache:
-            debug("Fetching initial linkding cache")
-            thread = Thread(target=self.cache_routine, daemon=True)
-            thread.start()
+        if not self._auto_cache:
+            self.thread_stop.set()
+
+        self.cache_thread.start()
 
     @property
     def instance_url(self):
@@ -93,9 +95,13 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
     def auto_cache(self):
         return self._auto_cache
 
-    @cache_results.setter
+    @auto_cache.setter
     def auto_cache(self, value):
         self._auto_cache = value
+        if self._auto_cache and self._cache_results:
+            self.thread_stop.clear()
+        else:
+            self.thread_stop.set()
         self.writeConfig("auto_cache", value)
 
     def configWidget(self):
@@ -202,7 +208,8 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
     def cache_routine(self):
         while True:
-            self.refresh_cache()
+            if not self.thread_stop.is_set():
+                self.refresh_cache()
             sleep(3600)
 
     def refresh_cache(self):
