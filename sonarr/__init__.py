@@ -227,11 +227,11 @@ class Plugin(PluginInstance, TriggerQueryHandler):
     def series_lookup(self, query_string: str) -> List[Dict]:
         params = {"term": query_string.strip()}
         url = f"{self._instance_url}/api/series/lookup/?{parse.urlencode(params)}"
-        debug(f"[sonarr] Making GET request to {url}")
+        debug(f"Making GET request to {url}")
         response = requests.get(url, headers=self.headers)
         if response.ok:
             return (series for series in response.json())
-        warning(f"[sonarr] Got response {response.status_code} when attempting to fetch series data")
+        warning(f"Got response {response.status_code} when attempting to fetch series data")
         return []
 
     def refresh_series(self):
@@ -240,7 +240,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         if response.ok:
             return (series for series in response.json())
         else:
-            warning(f"[sonarr] Got response {response.status_code} when attempting to fetch series data")
+            warning(f"Got response {response.status_code} when attempting to fetch series data")
 
     def add_series(self, series: Dict, search_missing: bool = False) -> None:
         url = f"{self._instance_url}/api/series"
@@ -267,9 +267,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 "searchForMissingEpisodes": search_missing,
             },
         }
-        debug(f"[sonarr] Sending data: {data}")
+        debug(f"Sending data: {data}")
         response = requests.post(url=url, json=data, headers=self.headers)
-        debug(f"[sonarr] Got response {response.status_code} from Sonarr")
+        debug(f"Got response {response.status_code} from Sonarr")
 
     def rescan_series(self, series_id: str) -> None:
         url = f"{self._instance_url}/api/command/"
