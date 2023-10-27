@@ -335,7 +335,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         return (tag for tag_list in self.fetch_request(url) for tag in tag_list)
 
     def fetch_types(self):
-        url = f"{self._instance_url}/api/types/"
+        url = f"{self._instance_url}/api/document_types/"
         return (doctype for type_list in self.fetch_request(url) for doctype in type_list)
 
     def refresh_cache(self):
