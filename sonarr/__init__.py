@@ -33,7 +33,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             id=md_id,
             name=md_name,
             description=md_description,
-            synopsis="<article-name>",
+            synopsis="<series-title>",
             defaultTrigger="sonarr ",
         )
         PluginInstance.__init__(self, extensions=[self])
@@ -133,8 +133,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             if stripped.startswith("add"):
                 # Add new series
                 if stripped[3:]:
-                    data = self.series_lookup(stripped)
-                    print(data)
+                    data = self.series_lookup(stripped[3:])
                     items = [item for item in self.gen_add_items(data)]
                     query.add(items)
                 else:
