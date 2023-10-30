@@ -30,7 +30,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
             id=md_id,
             name=md_name,
             description=md_description,
-            synopsis="<article-name>",
+            synopsis="<document>",
             defaultTrigger="pl ",
         )
         GlobalQueryHandler.__init__(self, id=md_id, name=md_name, description=md_description, defaultTrigger="pl ")
