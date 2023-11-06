@@ -1,6 +1,6 @@
 """Extension to interact with a readarr instance API.
 
-Extension supports searching existing library of films and adding new films.
+Extension supports searching existing library of authors and adding new authors.
 
 """
 
@@ -16,7 +16,7 @@ from albert import *
 md_iid = "2.1"
 md_version = "1.0"
 md_name = "Readarr"
-md_description = "Manage films via a readarr instance"
+md_description = "Manage books/authors via a readarr instance"
 md_license = "MIT"
 md_url = "https://github.com/Pete-Hamlin/albert-python"
 md_maintainers = ["@Pete-Hamlin"]
