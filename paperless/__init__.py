@@ -44,6 +44,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
         self._filter_by_tags = self.readConfig("filter_by_tags", bool) or True
         self._filter_by_type = self.readConfig("filter_by_type", bool) or True
+        self._filter_by_correspondent = self.readConfig("filter_by_correspondent", bool) or True
         self._filter_by_body = self.readConfig("filter_by_body", bool) or False
 
         self._cache_results = self.readConfig("cache_results", bool) or True
@@ -59,7 +60,8 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
             self.thread_stop.set()
 
         self.tag_file = self.dataLocation / "paperless-tags.json"
-        self.type_file = self.dataLocation / " iconspaperless-types.json"
+        self.type_file = self.dataLocation / " paperless-types.json"
+        self.correspondent_file = self.dataLocation / " paperless-correspondents.json"
 
         self.cache_thread.start()
 
@@ -161,6 +163,19 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         self.writeConfig("filter_by_type", value)
 
     @property
+    def filter_by_correspondent(self):
+        return self._filter_by_correspondent
+
+    @filter_by_correspondent.setter
+    def filter_by_correspondent(self, value):
+        self._filter_by_correspondent = value
+        if self._filter_by_correspondent:
+            self.refresh_correspondents()
+        else:
+            self.correspondent_file.unlink(missing_ok=True)
+        self.writeConfig("filter_by_correspondent", value)
+
+    @property
     def filter_by_body(self):
         return self._filter_by_body
 
@@ -182,6 +197,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
             {"type": "lineedit", "property": "download_path", "label": "Download Path"},
             {"type": "checkbox", "property": "filter_by_tags", "label": "Filter by document tags"},
             {"type": "checkbox", "property": "filter_by_type", "label": "Filter by document type"},
+            {"type": "checkbox", "property": "filter_by_correspondent", "label": "Filter by document correspondent"},
             {"type": "checkbox", "property": "filter_by_body", "label": "Filter by document body"},
             {"type": "checkbox", "property": "cache_results", "label": "Cache results locally"},
             {"type": "spinbox", "property": "cache_length", "label": "Cache length (minutes)"},
@@ -240,9 +256,11 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         filters = item["title"]
         if self._filter_by_tags:
             filters += item.get("tags") or ""
-        if self.filter_by_type:
+        if self._filter_by_type:
             filters += item.get("document_type") or ""
-        if self.filter_by_body:
+        if self._filter_by_correspondent:
+            filters += item.get("correspondent") or ""
+        if self._filter_by_body:
             filters += item.get("body") or ""
         return filters
 
@@ -256,7 +274,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
                 subtext=" - ".join(
                     [
                         document.get("document_type") or "No type",
-                        # document.get("correspondent") or "No Correspondent",
+                        document.get("correspondent") or "No Correspondent",
                         document.get("tags") or "No tags",
                     ]
                 ),
@@ -299,11 +317,19 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
     def parse_type(self, doctype: int):
         if doctype:
-            parsed_file = self.read_file(self.tag_file)
+            parsed_file = self.read_file(self.type_file)
             if not parsed_file:
                 # Refetch types and try again
                 parsed_file = self.refresh_types()
             return next(parsed["name"] for parsed in parsed_file if parsed["id"] == doctype)
+
+    def parse_correspondent(self, correspondent: int):
+        if correspondent:
+            parsed_file = self.read_file(self.correspondent_file)
+            if not parsed_file:
+                # Refetch types and try again
+                parsed_file = self.refresh_correspondents()
+            return next(parsed["name"] for parsed in parsed_file if parsed["id"] == correspondent)
 
     def get_results(self):
         if self._cache_results:
@@ -325,6 +351,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
         # This allows us to only run expensive parse functions once at the point of data ingress
         documents = self.field_map(documents, "document_type", self.parse_type)
+        documents = self.field_map(documents, "correspondent", self.parse_correspondent)
         documents = self.field_map(documents, "tags", self.parse_tags)
 
         return documents
@@ -343,6 +370,10 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
         url = f"{self._instance_url}/api/document_types/"
         return (doctype for type_list in self.fetch_request(url) for doctype in type_list)
 
+    def fetch_correspondents(self):
+        url = f"{self._instance_url}/api/correspondents/"
+        return (correspondent for corr_list in self.fetch_request(url) for correspondent in corr_list)
+
     def refresh_cache(self):
         results = self.fetch_documents()
         self.cache_timeout = datetime.now() + timedelta(minutes=self._cache_length)
@@ -359,6 +390,9 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
 
     def refresh_types(self):
         return self.write_file(self.type_file, [doc_type for doc_type in self.fetch_types()])
+
+    def refresh_correspondents(self):
+        return self.write_file(self.correspondent_file, [correspondent for correspondent in self.fetch_correspondents()])
 
     def fetch_request(self, url: str):
         while url:
