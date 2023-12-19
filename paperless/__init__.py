@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+from socket import timeout
 from threading import Event, Thread
 from time import sleep
 from urllib import parse
@@ -255,6 +256,7 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
                 subtext=" - ".join(
                     [
                         document.get("document_type") or "No type",
+                        # document.get("correspondent") or "No Correspondent",
                         document.get("tags") or "No tags",
                     ]
                 ),
@@ -288,8 +290,12 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
             if not parsed_file:
                 # Refetch tags and try again
                 parsed_file = self.refresh_tags()
-            return next(parsed["name"] for parsed in parsed_file if parsed["id"] == tag)
-            # return parsed_file.get(doctype)
+            try:
+                return next(parsed["name"] for parsed in parsed_file if parsed["id"] == tag)
+            except StopIteration:
+                warning(f"Error parsing tag {tag}")
+                return f"<tag-{tag}>"
+
 
     def parse_type(self, doctype: int):
         if doctype:
@@ -298,7 +304,6 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
                 # Refetch types and try again
                 parsed_file = self.refresh_types()
             return next(parsed["name"] for parsed in parsed_file if parsed["id"] == doctype)
-            # return parsed_file.get(doctype)
 
     def get_results(self):
         if self._cache_results:
@@ -367,6 +372,6 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
                     yield result["results"]
                 else:
                     warning(f"Got response {response.status_code} querying {url}")
-            except (requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout):
+            except timeout:
                 warning(f"Connection timed out for {url} - exiting")
                 break
