@@ -6,3 +6,4 @@ __pycache__
 .sync*
 .nextcloudsync.log
 .sync_ecdc8602a0e8.db-wal
+**/TODO.md
