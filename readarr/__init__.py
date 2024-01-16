@@ -14,7 +14,7 @@ import requests
 from albert import *
 
 md_iid = "2.1"
-md_version = "1.0"
+md_version = "1.1"
 md_name = "Readarr"
 md_description = "Manage books/authors via a readarr instance"
 md_license = "MIT"
@@ -142,12 +142,10 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     return
 
             if stripped.startswith("add"):
-                # Add new series
+                # Add new author
                 if stripped[3:]:
                     data = self.author_lookup(stripped[3:])
-                    print(data)
                     items = [item for item in self.gen_add_items(data)]
-                    print(items)
                     query.add(items)
                 else:
                     query.add(
@@ -169,7 +167,6 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
     def gen_add_items(self, data: list[dict]) -> List[Item]:
         for author in data:
-            print(data)
             title = author["authorName"]
             subtext = "{} - {}".format(author.get("status").capitalize(), author.get("overview"))
             actions = [
@@ -190,7 +187,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 ),
             ]
 
-            for link in author["Links"]:
+            for link in author.get("Links") or []:
                 if link["name"] == "Goodreads":
                     action.append(
                         Action(
