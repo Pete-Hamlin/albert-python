@@ -16,7 +16,7 @@ md_credits = ["@janeklb", "@Bierchermuesli"]
 md_bin_dependencies = ["mullvad"]
 
 
-class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
+class Plugin(PluginInstance, GlobalQueryHandler):
     VPNConnection = namedtuple("VPNConnection", ["name", "connected"])
     iconUrls = ["xdg:network-wired"]
     blockedIcon = ["file:{}".format(Path(__file__).parent / "lock-10.png")]
@@ -24,14 +24,6 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
     disconnectIcon = ["file:{}".format(Path(__file__).parent / "lock-1.png")]
 
     def __init__(self):
-        TriggerQueryHandler.__init__(
-            self,
-            id=md_id,
-            name=md_name,
-            description=md_description,
-            synopsis="<article-name>",
-            defaultTrigger="mullvad ",
-        )
         GlobalQueryHandler.__init__(self, id=md_id, name=md_name, description=md_description, defaultTrigger="mullvad ")
         PluginInstance.__init__(self, extensions=[self])
 
