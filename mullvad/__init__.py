@@ -5,18 +5,18 @@ from pathlib import Path
 
 from albert import *
 
-md_iid = "2.1"
-md_version = "2.0"
+md_iid = "2.2"
+md_version = "2.1"
 md_name = "Mullvad"
 md_description = "Manage mullvad VPN connections"
-md_license = "GPLv3"
+md_license = "MIT"
 md_url = "https://github.com/albertlauncher/python"
-md_maintainers = ["@Pete-Hamlin"]
+md_authors = ["@Pete-Hamlin"]
 md_credits = ["@janeklb", "@Bierchermuesli"]
 md_bin_dependencies = ["mullvad"]
 
 
-class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
+class Plugin(PluginInstance, GlobalQueryHandler):
     VPNConnection = namedtuple("VPNConnection", ["name", "connected"])
     iconUrls = ["xdg:network-wired"]
     blockedIcon = ["file:{}".format(Path(__file__).parent / "lock-10.png")]
@@ -24,14 +24,6 @@ class Plugin(PluginInstance, GlobalQueryHandler, TriggerQueryHandler):
     disconnectIcon = ["file:{}".format(Path(__file__).parent / "lock-1.png")]
 
     def __init__(self):
-        TriggerQueryHandler.__init__(
-            self,
-            id=md_id,
-            name=md_name,
-            description=md_description,
-            synopsis="<article-name>",
-            defaultTrigger="mullvad ",
-        )
         GlobalQueryHandler.__init__(self, id=md_id, name=md_name, description=md_description, defaultTrigger="mullvad ")
         PluginInstance.__init__(self, extensions=[self])
 
