@@ -7,3 +7,8 @@ __pycache__
 .nextcloudsync.log
 .sync_ecdc8602a0e8.db-wal
 **/TODO.md
+
+obsidian/
+wallabag/
+paperless/
+linkding/

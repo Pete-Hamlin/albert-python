@@ -13,13 +13,13 @@ from urllib import parse
 import requests
 from albert import *
 
-md_iid = "2.1"
-md_version = "1.1"
+md_iid = "2.2"
+md_version = "1.2"
 md_name = "Readarr"
 md_description = "Manage books/authors via a readarr instance"
 md_license = "MIT"
 md_url = "https://github.com/Pete-Hamlin/albert-python"
-md_maintainers = ["@Pete-Hamlin"]
+md_authors = ["@Pete-Hamlin"]
 md_lib_dependencies = ["requests"]
 
 
@@ -143,10 +143,28 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
             if stripped.startswith("add"):
                 # Add new author
-                if stripped[3:]:
-                    data = self.author_lookup(stripped[3:])
+                query_str = stripped[3:]
+                if query_str:
+                    data = self.author_lookup(query_str)
                     items = [item for item in self.gen_add_items(data)]
-                    query.add(items)
+                    if items:   
+                        query.add(items)
+                    else:
+                        query.add(
+                            StandardItem(
+                                id=md_id,
+                                iconUrls=self.iconUrls,
+                                text=f"Search {query_str}",
+                                subtext="Search for authors/books on Readarr",
+                                actions=[
+                                    Action(
+                                        "search",
+                                        "Search on Readarr",
+                                        lambda url=f"{self._instance_url}/add/search?term={query_str}": openUrl(url),
+                                    ),
+                                ]
+                            )
+                        )
                 else:
                     query.add(
                         StandardItem(
@@ -157,7 +175,14 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 # Search existing series
                 data = (item for item in self.refresh_series() if stripped in item["authorName"].lower())
                 items = [item for item in self.gen_search_items(data)]
-                query.add(items)
+                if items:
+                    query.add(items)
+                else:
+                    query.add(
+                        StandardItem(
+                            id=md_id, text="Author not found", subtext=stripped, iconUrls=self.iconUrls
+                        )
+                    )
         else:
             query.add(
                 StandardItem(
@@ -179,11 +204,6 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     "monitor",
                     "Monitor",
                     lambda chosen_author=author: self.add_author(chosen_author),
-                ),
-                Action(
-                    "view",
-                    "View on readarr",
-                    lambda url=f"{self._instance_url}/add/new?term={title}": openUrl(url),
                 ),
             ]
 

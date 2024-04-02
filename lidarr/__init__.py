@@ -12,13 +12,13 @@ from urllib import parse
 import requests
 from albert import *
 
-md_iid = "2.1"
-md_version = "2.0"
+md_iid = "2.2"
+md_version = "2.1"
 md_name = "Lidarr"
-md_description = "Manage TV series via a Sonarr instance"
+md_description = "Manage music artists via a Lidarr instance"
 md_license = "MIT"
 md_url = "https://github.com/Pete-Hamlin/albert-python"
-md_maintainers = ["@Pete-Hamlin"]
+md_authors = ["@Pete-Hamlin"]
 md_lib_dependencies = ["requests"]
 
 
@@ -142,10 +142,28 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
             if stripped.startswith("add"):
                 # Add new artist
-                if stripped[3:]:
-                    data = self.artist_lookup(stripped[3:])
+                query_str = stripped[3:]
+                if query_str:
+                    data = self.artist_lookup(query_str)
                     items = [item for item in self.gen_add_items(data)]
-                    query.add(items)
+                    if items:   
+                        query.add(items)
+                    else:
+                        query.add(
+                            StandardItem(
+                                id=md_id,
+                                iconUrls=self.iconUrls,
+                                text=f"Search {query_str}",
+                                subtext="Search for artist on Lidarr",
+                                actions=[
+                                    Action(
+                                        "search",
+                                        "Search on Lidarr",
+                                        lambda url=f"{self._instance_url}/add/search?term={query_str}": openUrl(url),
+                                    ),
+                                ]
+                            )
+                        )
                 else:
                     query.add(
                         StandardItem(
@@ -156,7 +174,14 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 # Search existing artists
                 data = (item for item in self.refresh_artist() if stripped in item["artistName"].lower())
                 items = [item for item in self.gen_search_items(data)]
-                query.add(items)
+                if items:
+                    query.add(items)
+                else:
+                    query.add(
+                        StandardItem(
+                            id=md_id, text="Artist not found", subtext=stripped, iconUrls=self.iconUrls
+                        )
+                    )
         else:
             query.add(
                 StandardItem(
