@@ -40,7 +40,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         self._instance_url = self.readConfig("instance_url", str) or "http://localhost:8686"
         self._api_key = self.readConfig("api_key", str) or ""
 
-        self._root_path = self.readConfig("root_path", str) or "/tv"
+        self._root_path = self.readConfig("root_path", str) or "/music"
         self._profile_id = self.readConfig("profile_id", int) or 1
         self._metadata_id = self.readConfig("metadata_id", int) or 1
         self._default_monitor = self.readConfig("default_monitor", bool) or True
