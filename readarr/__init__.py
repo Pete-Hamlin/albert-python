@@ -4,17 +4,16 @@ Extension supports searching existing library of authors and adding new authors.
 
 """
 
-import os
 from pathlib import Path
 from time import sleep
-from typing import Dict, List
+from typing import Dict, Iterator
 from urllib import parse
 
 import requests
 from albert import *
 
-md_iid = "2.2"
-md_version = "1.2"
+md_iid = "2.3"
+md_version = "1.3"
 md_name = "Readarr"
 md_description = "Manage books/authors via a readarr instance"
 md_license = "MIT"
@@ -28,15 +27,15 @@ class Plugin(PluginInstance, TriggerQueryHandler):
     user_agent = "org.albert.readarr"
 
     def __init__(self):
+        PluginInstance.__init__(self)
         TriggerQueryHandler.__init__(
             self,
-            id=md_id,
-            name=md_name,
-            description=md_description,
+            id=self.id,
+            name=self.name,
+            description=self.description,
             synopsis="<author or book>",
             defaultTrigger="readarr ",
         )
-        PluginInstance.__init__(self, extensions=[self])
 
         self._instance_url = self.readConfig("instance_url", str) or "http://localhost:8787"
         self._api_key = self.readConfig("api_key", str) or ""
@@ -146,13 +145,13 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 query_str = stripped[3:]
                 if query_str:
                     data = self.author_lookup(query_str)
-                    items = [item for item in self.gen_add_items(data)]
+                    items = [item for item in self.gen_add_items(data)] if data else []
                     if items:   
                         query.add(items)
                     else:
                         query.add(
                             StandardItem(
-                                id=md_id,
+                                id=self.id,
                                 iconUrls=self.iconUrls,
                                 text=f"Search {query_str}",
                                 subtext="Search for authors/books on Readarr",
@@ -168,32 +167,33 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 else:
                     query.add(
                         StandardItem(
-                            id=md_id, text=md_name, subtext="Add a new author on readarr", iconUrls=self.iconUrls
+                            id=self.id, text=self.name, subtext="Add a new author on readarr", iconUrls=self.iconUrls
                         )
                     )
             else:
                 # Search existing series
-                data = (item for item in self.refresh_series() if stripped in item["authorName"].lower())
-                items = [item for item in self.gen_search_items(data)]
+                data = (item for item in self.refresh_authors() or [] if stripped in item["authorName"].lower())
+                items = [item for item in self.gen_search_items(data)] if data else []
                 if items:
                     query.add(items)
                 else:
                     query.add(
                         StandardItem(
-                            id=md_id, text="Author not found", subtext=stripped, iconUrls=self.iconUrls
+                            id=self.id, text="Author not found", subtext=stripped, iconUrls=self.iconUrls
                         )
                     )
         else:
             query.add(
                 StandardItem(
-                    id=md_id, text=md_name, subtext="Search for an existing author on readarr", iconUrls=self.iconUrls
+                    id=self.id, text=self.name, subtext="Search for an existing author on readarr", iconUrls=self.iconUrls
                 )
             )
 
-    def gen_add_items(self, data: list[dict]) -> List[Item]:
+    def gen_add_items(self, data: Iterator[dict]) -> Iterator[Item]:
         for author in data:
             title = author["authorName"]
-            subtext = "{} - {}".format(author.get("status").capitalize(), author.get("overview"))
+            status = author.get("status")
+            subtext = "{} - {}".format(status.capitalize() if status else "", author.get("overview"))
             actions = [
                 Action(
                     "monitor-search",
@@ -209,7 +209,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
             for link in author.get("Links") or []:
                 if link["name"] == "Goodreads":
-                    action.append(
+                    actions.append(
                         Action(
                             "goodreads",
                             "View on Goodreads",
@@ -217,13 +217,14 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                         ),
                     )
 
-            yield StandardItem(id=md_id, iconUrls=self.iconUrls, text=title, subtext=subtext, actions=actions)
+            yield StandardItem(id=self.id, iconUrls=self.iconUrls, text=title, subtext=subtext, actions=actions)
 
-    def gen_search_items(self, data: list[dict]) -> List[Item]:
+    def gen_search_items(self, data: Iterator[dict]) -> Iterator[Item]:
         for author in data:
             title = author["authorName"]
+            status = author.get("status")
             subtext = "{} - {}/{} books owned".format(
-                author.get("status").capitalize(),
+                status.capitalize() if status else "",
                 author["statistics"]["bookFileCount"],
                 author["statistics"]["availableBookCount"],
             )
@@ -252,7 +253,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 ],
             )
 
-    def author_lookup(self, query_string: str) -> List[Dict]:
+    def author_lookup(self, query_string: str) -> Iterator[Dict] | None:
         params = {"term": query_string.strip()}
         url = f"{self._instance_url}/api/v1/author/lookup?{parse.urlencode(params)}"
         debug(f"Making GET request to {url}")
@@ -260,9 +261,8 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         if response.ok:
             return (author for author in response.json())
         warning(f"Got response {response.status_code} when attempting to fetch author data")
-        return []
 
-    def refresh_series(self):
+    def refresh_authors(self) -> Iterator[dict] | None:
         url = f"{self._instance_url}/api/v1/author"
         debug(f"About to GET {url}")
         response = requests.get(url, headers=self.headers)
@@ -273,7 +273,6 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
     def add_author(self, author: Dict, search: bool = False) -> None:
         url = f"{self._instance_url}/api/v1/author"
-        seasons = []
         data = author
         data["id"] = 0
         data["qualityProfileId"] = self._profile_id

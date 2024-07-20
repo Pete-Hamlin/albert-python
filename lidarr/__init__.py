@@ -3,17 +3,17 @@
 Extension supports searching existing library of artists and adding new artists.
 """
 
-import os
+from collections.abc import Iterator
 from pathlib import Path
 from time import sleep
-from typing import Dict, List
+from typing import Dict
 from urllib import parse
 
 import requests
 from albert import *
 
-md_iid = "2.2"
-md_version = "2.1"
+md_iid = "2.3"
+md_version = "2.3"
 md_name = "Lidarr"
 md_description = "Manage music artists via a Lidarr instance"
 md_license = "MIT"
@@ -27,15 +27,15 @@ class Plugin(PluginInstance, TriggerQueryHandler):
     user_agent = "org.albert.lidarr"
 
     def __init__(self):
+        PluginInstance.__init__(self)
         TriggerQueryHandler.__init__(
             self,
-            id=md_id,
-            name=md_name,
-            description=md_description,
+            id=self.id,
+            name=self.name,
+            description=self.description,
             synopsis="<artist>",
             defaultTrigger="lidarr ",
         )
-        PluginInstance.__init__(self, extensions=[self])
 
         self._instance_url = self.readConfig("instance_url", str) or "http://localhost:8686"
         self._api_key = self.readConfig("api_key", str) or ""
@@ -145,13 +145,13 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 query_str = stripped[3:]
                 if query_str:
                     data = self.artist_lookup(query_str)
-                    items = [item for item in self.gen_add_items(data)]
+                    items = [item for item in self.gen_add_items(data)] if data else []
                     if items:   
                         query.add(items)
                     else:
                         query.add(
                             StandardItem(
-                                id=md_id,
+                                id=self.id,
                                 iconUrls=self.iconUrls,
                                 text=f"Search {query_str}",
                                 subtext="Search for artist on Lidarr",
@@ -167,32 +167,33 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 else:
                     query.add(
                         StandardItem(
-                            id=md_id, text=md_name, subtext="Add a new artist on Lidarr", iconUrls=self.iconUrls
+                            id=self.id, text=self.name, subtext="Add a new artist on Lidarr", iconUrls=self.iconUrls
                         )
                     )
             else:
                 # Search existing artists
-                data = (item for item in self.refresh_artist() if stripped in item["artistName"].lower())
-                items = [item for item in self.gen_search_items(data)]
+                data = (item for item in self.refresh_artist() or [] if stripped in item["artistName"].lower())
+                items = [item for item in self.gen_search_items(data)] if data else []
                 if items:
                     query.add(items)
                 else:
                     query.add(
                         StandardItem(
-                            id=md_id, text="Artist not found", subtext=stripped, iconUrls=self.iconUrls
+                            id=self.id, text="Artist not found", subtext=stripped, iconUrls=self.iconUrls
                         )
                     )
         else:
             query.add(
                 StandardItem(
-                    id=md_id, text=md_name, subtext="Search for an existing artist on Lidarr", iconUrls=self.iconUrls
+                    id=self.id, text=self.name, subtext="Search for an existing artist on Lidarr", iconUrls=self.iconUrls
                 )
             )
 
-    def gen_add_items(self, data: list[dict]) -> List[Item]:
+    def gen_add_items(self, data: Iterator[dict]) -> Iterator[Item]:
         for artist in data:
             title = artist["artistName"]
-            subtext = "{} - {}".format(artist.get("artistType"), artist.get("status").capitalize())
+            status = artist.get("status")
+            subtext = "{} - {}".format(artist.get("artistType"), status.capitalize() if status else "")
             actions = [
                 Action(
                     "monitor",
@@ -227,9 +228,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                             lambda url=link["url"]: openUrl(url),
                         ),
                     )
-            yield StandardItem(id=md_id, iconUrls=self.iconUrls, text=title, subtext=subtext, actions=actions)
+            yield StandardItem(id=self.id, iconUrls=self.iconUrls, text=title, subtext=subtext, actions=actions)
 
-    def gen_search_items(self, data: list[dict]) -> List[Item]:
+    def gen_search_items(self, data: Iterator[dict]) -> Iterator[Item]:
         for artist in data:
             title = artist["artistName"]
             artist_url = "{}/api/v1/artist/{}".format(self._instance_url, artist["id"])
@@ -264,25 +265,22 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 ],
             )
 
-    def artist_lookup(self, query_string: str) -> List[Dict]:
+    def artist_lookup(self, query_string: str) -> Iterator[Dict] | None:
         params = {"term": query_string.strip()}
         url = f"{self._instance_url}/api/v1/artist/lookup/?{parse.urlencode(params)}"
         debug(f"Making GET request to {url}")
         response = requests.get(url, headers=self.headers)
         if response.ok:
-            print(response.json())
             return (artist for artist in response.json())
         warning(f"Got response {response.status_code} when attempting to fetch artist data")
-        return []
 
-    def refresh_artist(self):
+    def refresh_artist(self) -> Iterator[dict] | None:
         url = f"{self._instance_url}/api/v1/artist"
         response = requests.get(url, headers=self.headers)
         if response.ok:
             return (series for series in response.json())
         else:
             warning(f"Got response {response.status_code} when attempting to fetch artist data")
-            return []
 
     def add_artist(self, artist: Dict, search_missing: bool = False) -> None:
         url = f"{self._instance_url}/api/v1/artist"

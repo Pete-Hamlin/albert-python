@@ -4,17 +4,17 @@ Extension supports searching existing library of series and adding new series.
 
 """
 
-import os
+from collections.abc import Iterator
 from pathlib import Path
 from time import sleep
-from typing import Dict, List
+from typing import Dict
 from urllib import parse
 
 import requests
 from albert import *
 
-md_iid = "2.2"
-md_version = "2.1"
+md_iid = "2.3"
+md_version = "2.2"
 md_name = "Sonarr"
 md_description = "Manage TV series via a Sonarr instance"
 md_license = "MIT"
@@ -28,15 +28,15 @@ class Plugin(PluginInstance, TriggerQueryHandler):
     user_agent = "org.albert.sonarr"
 
     def __init__(self):
+        PluginInstance.__init__(self)
         TriggerQueryHandler.__init__(
             self,
-            id=md_id,
-            name=md_name,
-            description=md_description,
+            id=self.id,
+            name=self.name,
+            description=self.description,
             synopsis="<series-title>",
             defaultTrigger="sonarr ",
         )
-        PluginInstance.__init__(self, extensions=[self])
 
         self._instance_url = self.readConfig("instance_url", str) or "http://localhost:8989"
         self._api_key = self.readConfig("api_key", str) or ""
@@ -135,13 +135,13 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 query_str = stripped[3:]
                 if query_str:
                     data = self.series_lookup(query_str)
-                    items = [item for item in self.gen_add_items(data)]
+                    items = [item for item in self.gen_add_items(data)] if data else []
                     if items:   
                         query.add(items)
                     else:
                         query.add(
                             StandardItem(
-                                id=md_id,
+                                id=self.id,
                                 iconUrls=self.iconUrls,
                                 text=f"Search {query_str}",
                                 subtext="Search for series on Sonarr",
@@ -157,35 +157,35 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 else:
                     query.add(
                         StandardItem(
-                            id=md_id, text=md_name, subtext="Add a new series on Sonarr", iconUrls=self.iconUrls
+                            id=self.id, text=self.name, subtext="Add a new series on Sonarr", iconUrls=self.iconUrls
                         )
                     )
             else:
                 # Search existing series
-                data = (item for item in self.refresh_series() if stripped in item["title"].lower())
+                data = (item for item in self.refresh_series() or [] if stripped in item["title"].lower())
                 items = [item for item in self.gen_search_items(data)]
                 if items:
                     query.add(items)
                 else:
                     query.add(
                         StandardItem(
-                            id=md_id, text="Series not found", subtext=stripped, iconUrls=self.iconUrls
+                            id=self.id, text="Series not found", subtext=stripped, iconUrls=self.iconUrls
                         )
                     )
         else:
             query.add(
                 StandardItem(
-                    id=md_id, text=md_name, subtext="Search for an existing series on Sonarr", iconUrls=self.iconUrls
+                    id=self.id, text=self.name, subtext="Search for an existing series on Sonarr", iconUrls=self.iconUrls
                 )
             )
 
-    def gen_add_items(self, data: list[dict]) -> List[Item]:
+    def gen_add_items(self, data: Iterator[Dict]) -> Iterator[Item]:
         for series in data:
             title = "{} ({})".format(series["title"], series["year"])
             subtext = "{}: {}".format(series.get("network"), series.get("overview"))
             imdb_url = "https://www.imdb.com/title/{}".format(series.get("imdbId"))
             yield StandardItem(
-                id=md_id,
+                id=self.id,
                 iconUrls=self.iconUrls,
                 text=title,
                 subtext=subtext,
@@ -208,7 +208,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 ],
             )
 
-    def gen_search_items(self, data: list[dict]) -> List[Item]:
+    def gen_search_items(self, data) -> Iterator[Item]:
         for series in data:
             title = "{} ({})".format(series["title"], series["year"])
             url = "{}/series/{}".format(self._instance_url, series["id"])
@@ -243,26 +243,27 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 ],
             )
 
-    def series_lookup(self, query_string: str) -> List[Dict]:
+    def series_lookup(self, query_string: str) -> Iterator[Dict] | None:
         params = {"term": query_string.strip()}
-        url = f"{self._instance_url}/api/series/lookup/?{parse.urlencode(params)}"
+        url = f"{self._instance_url}/api/v3/series/lookup/?{parse.urlencode(params)}"
         debug(f"Making GET request to {url}")
         response = requests.get(url, headers=self.headers)
         if response.ok:
             return (series for series in response.json())
         warning(f"Got response {response.status_code} when attempting to fetch series data")
-        return []
 
-    def refresh_series(self):
-        url = f"{self._instance_url}/api/series"
+    def refresh_series(self) -> Iterator[dict] | None:
+        url = f"{self._instance_url}/api/v3/series"
+        debug(f"Making GET request to {url}")
         response = requests.get(url, headers=self.headers)
         if response.ok:
             return (series for series in response.json())
         else:
             warning(f"Got response {response.status_code} when attempting to fetch series data")
+            return 
 
     def add_series(self, series: Dict, search_missing: bool = False) -> None:
-        url = f"{self._instance_url}/api/series"
+        url = f"{self._instance_url}/api/v3/series"
         seasons = []
         for season in series["seasons"]:
             seasons.append(
@@ -291,11 +292,11 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         debug(f"Got response {response.status_code} from Sonarr")
 
     def rescan_series(self, series_id: str) -> None:
-        url = f"{self._instance_url}/api/command/"
+        url = f"{self._instance_url}/api/v3/command/"
         data = {"name": "RescanSeries", "seriesId": series_id}
         requests.post(url, json=data, headers=self.headers)
 
     def delete_series(self, series_id: str) -> None:
-        url = f"{self._instance_url}/api/series/{series_id}"
+        url = f"{self._instance_url}/api/v3/series/{series_id}"
         data = {"id": series_id, "deleteFiles": self._delete_remove_files}
         requests.delete(url, json=data, headers=self.headers)
