@@ -5,8 +5,8 @@ from pathlib import Path
 
 from albert import *
 
-md_iid = "2.2"
-md_version = "2.1"
+md_iid = "2.3"
+md_version = "2.2"
 md_name = "Mullvad"
 md_description = "Manage mullvad VPN connections"
 md_license = "MIT"
@@ -24,8 +24,8 @@ class Plugin(PluginInstance, GlobalQueryHandler):
     disconnectIcon = ["file:{}".format(Path(__file__).parent / "lock-1.png")]
 
     def __init__(self):
-        GlobalQueryHandler.__init__(self, id=md_id, name=md_name, description=md_description, defaultTrigger="mullvad ")
-        PluginInstance.__init__(self, extensions=[self])
+        PluginInstance.__init__(self)
+        GlobalQueryHandler.__init__(self, id=self.id, name=self.name, description=self.description, defaultTrigger="mullvad ")
 
         self.connection_regex = re.compile(r"[a-z]{2}-[a-z]*-[a-z]{2,4}-[\d]{2,3}")
 
@@ -37,12 +37,15 @@ class Plugin(PluginInstance, GlobalQueryHandler):
                 yield (relay[0], relayStr)
 
     def getIcon(self, status_string: str):
-        if "Blocked" in status_string:
-            return self.blockedIcon
-        if "Disconnected" in status_string:
-            return self.disconnectIcon
-        if "Connected" in status_string:
-            return self.connectIcon
+        match status_string:
+            case "Blocked":
+                return self.blockedIcon
+            case "Disconnected":
+                return self.disconnectIcon
+            case "Connected":
+                return self.connectIcon
+            case _:
+                return self.iconUrls
 
     def defaultItems(self):
         statusStr = subprocess.check_output("mullvad status", shell=True, encoding="UTF-8").strip()
@@ -117,7 +120,7 @@ class Plugin(PluginInstance, GlobalQueryHandler):
 
     def buildItem(self, relay):
         name = relay[0]
-        command = ["mullvad", "relay", "set", "hostname", name]
+        command = ["mullvad", "relay", "set", "location", name]
         subtext = relay[1]
         return StandardItem(
             id=f"vpn-{name}",
@@ -154,3 +157,5 @@ class Plugin(PluginInstance, GlobalQueryHandler):
             return [
                 RankItem(item=item, score=0) for item in self.actions() if query.string.lower() in item.text.lower()
             ]
+        else:
+            return []
