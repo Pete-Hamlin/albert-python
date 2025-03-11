@@ -31,13 +31,17 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         PluginInstance.__init__(self)
         TriggerQueryHandler.__init__(self)
 
-        self._instance_url = self.readConfig("instance_url", str) or "http://localhost:8989"
+        self._instance_url = (
+            self.readConfig("instance_url", str) or "http://localhost:8989"
+        )
         self._api_key = self.readConfig("api_key", str) or ""
 
         self._root_path = self.readConfig("root_path", str) or "/tv"
         self._profile_id = self.readConfig("profile_id", int) or 3
         self._default_monitor = self.readConfig("default_monitor", bool) or True
-        self._delete_remove_files = self.readConfig("delete_remove_files", bool) or False
+        self._delete_remove_files = (
+            self.readConfig("delete_remove_files", bool) or False
+        )
 
         self.headers = {
             "User_Agent": self.user_agent,
@@ -113,8 +117,16 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             },
             {"type": "lineedit", "property": "root_path", "label": "Root Path"},
             {"type": "spinbox", "property": "profile_id", "label": "Profile ID"},
-            {"type": "checkbox", "property": "default_monitor", "label": "Monitor by default"},
-            {"type": "checkbox", "property": "delete_remove_files", "label": "Delete removes files"},
+            {
+                "type": "checkbox",
+                "property": "default_monitor",
+                "label": "Monitor by default",
+            },
+            {
+                "type": "checkbox",
+                "property": "delete_remove_files",
+                "label": "Delete removes files",
+            },
         ]
 
     def handleTriggerQuery(self, query):
@@ -132,7 +144,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 if query_str:
                     data = self.series_lookup(query_str)
                     items = [item for item in self.gen_add_items(data)] if data else []
-                    if items:   
+                    if items:
                         query.add(items)
                     else:
                         query.add(
@@ -144,33 +156,45 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                                     Action(
                                         "search",
                                         "Search on Sonarr",
-                                        lambda url=f"{self._instance_url}/add/new?term={query_str}": openUrl(url),
+                                        lambda url=f"{self._instance_url}/add/new?term={query_str}": openUrl(
+                                            url
+                                        ),
                                     ),
-                                ]
+                                ],
                             )
                         )
                 else:
                     query.add(
                         StandardItem(
-                            id=self.id, text=self.name, subtext="Add a new series on Sonarr", iconUrls=self.iconUrls
+                            text=md_name,
+                            subtext="Add a new series on Sonarr",
+                            iconUrls=self.iconUrls,
                         )
                     )
             else:
                 # Search existing series
-                data = (item for item in self.refresh_series() or [] if stripped in item["title"].lower())
+                data = (
+                    item
+                    for item in self.refresh_series() or []
+                    if stripped in item["title"].lower()
+                )
                 items = [item for item in self.gen_search_items(data)]
                 if items:
                     query.add(items)
                 else:
                     query.add(
                         StandardItem(
-                             text="Series not found", subtext=stripped, iconUrls=self.iconUrls
+                            text="Series not found",
+                            subtext=stripped,
+                            iconUrls=self.iconUrls,
                         )
                     )
         else:
             query.add(
                 StandardItem(
-                     text=md_name, subtext="Search for an existing series on Sonarr", iconUrls=self.iconUrls
+                    text=md_name,
+                    subtext="Search for an existing series on Sonarr",
+                    iconUrls=self.iconUrls,
                 )
             )
 
@@ -187,7 +211,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     Action(
                         "monitor-search",
                         "Monitor + Search",
-                        lambda chosen_series=series: self.add_series(chosen_series, search_missing=True),
+                        lambda chosen_series=series: self.add_series(
+                            chosen_series, search_missing=True
+                        ),
                     ),
                     Action(
                         "monitor",
@@ -244,7 +270,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         response = requests.get(url, headers=self.headers)
         if response.ok:
             return (series for series in response.json())
-        warning(f"Got response {response.status_code} when attempting to fetch series data")
+        warning(
+            f"Got response {response.status_code} when attempting to fetch series data"
+        )
 
     def refresh_series(self) -> Iterator[dict] | None:
         url = f"{self._instance_url}/api/v3/series"
@@ -253,8 +281,10 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         if response.ok:
             return (series for series in response.json())
         else:
-            warning(f"Got response {response.status_code} when attempting to fetch series data")
-            return 
+            warning(
+                f"Got response {response.status_code} when attempting to fetch series data"
+            )
+            return
 
     def add_series(self, series: Dict, search_missing: bool = False) -> None:
         url = f"{self._instance_url}/api/v3/series"
