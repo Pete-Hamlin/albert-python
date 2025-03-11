@@ -13,8 +13,8 @@ from urllib import parse
 import requests
 from albert import *
 
-md_iid = "2.3"
-md_version = "2.2"
+md_iid = "3.0"
+md_version = "2.3"
 md_name = "Radarr"
 md_description = "Manage films via a Radarr instance"
 md_license = "MIT"
@@ -29,28 +29,28 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
     def __init__(self):
         PluginInstance.__init__(self)
-        TriggerQueryHandler.__init__(
-            self,
-            id=self.id,
-            name=self.name,
-            description=self.description,
-            synopsis="<film-title>",
-            defaultTrigger="radarr ",
-        )
+        TriggerQueryHandler.__init__(self)
 
-        self._instance_url = self.readConfig("instance_url", str) or "http://localhost:8989"
+        self._instance_url = (
+            self.readConfig("instance_url", str) or "http://localhost:8989"
+        )
         self._api_key = self.readConfig("api_key", str) or ""
 
         self._root_path = self.readConfig("root_path", str) or "/movies"
         self._profile_id = self.readConfig("profile_id", int) or 1
         self._default_monitor = self.readConfig("default_monitor", bool) or True
-        self._delete_remove_files = self.readConfig("delete_remove_files", bool) or False
+        self._delete_remove_files = (
+            self.readConfig("delete_remove_files", bool) or False
+        )
 
         self.headers = {
             "User_Agent": self.user_agent,
             "X-Api-Key": self.api_key,
             "accept": "application/json",
         }
+
+    def defaultTrigger(self) -> str:
+        return "radarr "
 
     @property
     def instance_url(self):
@@ -117,8 +117,16 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             },
             {"type": "lineedit", "property": "root_path", "label": "Root Path"},
             {"type": "spinbox", "property": "profile_id", "label": "Profile ID"},
-            {"type": "checkbox", "property": "default_monitor", "label": "Monitor by default"},
-            {"type": "checkbox", "property": "delete_remove_files", "label": "Delete removes files"},
+            {
+                "type": "checkbox",
+                "property": "default_monitor",
+                "label": "Monitor by default",
+            },
+            {
+                "type": "checkbox",
+                "property": "delete_remove_files",
+                "label": "Delete removes files",
+            },
         ]
 
     def handleTriggerQuery(self, query):
@@ -136,12 +144,11 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 if query_str:
                     data = self.movie_lookup(query_str)
                     items = [item for item in self.gen_add_items(data)] if data else []
-                    if items:   
+                    if items:
                         query.add(items)
                     else:
                         query.add(
                             StandardItem(
-                                id=self.id,
                                 iconUrls=self.iconUrls,
                                 text=f"Search {query_str}",
                                 subtext="Search for movie on Radarr",
@@ -149,33 +156,45 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                                     Action(
                                         "search",
                                         "Search on Radarr",
-                                        lambda url=f"{self._instance_url}/add/new?term={query_str}": openUrl(url),
+                                        lambda url=f"{self._instance_url}/add/new?term={query_str}": openUrl(
+                                            url
+                                        ),
                                     ),
-                                ]
+                                ],
                             )
                         )
                 else:
                     query.add(
                         StandardItem(
-                            id=self.id, text=self.name, subtext="Add a new movie on Radarr", iconUrls=self.iconUrls
+                            text=md_name,
+                            subtext="Add a new movie on Radarr",
+                            iconUrls=self.iconUrls,
                         )
                     )
             else:
                 # Search existing series
-                data = (item for item in self.refresh_series() or [] if stripped in item["title"].lower())
+                data = (
+                    item
+                    for item in self.refresh_series() or []
+                    if stripped in item["title"].lower()
+                )
                 items = [item for item in self.gen_search_items(data)]
                 if items:
                     query.add(items)
                 else:
                     query.add(
                         StandardItem(
-                            id=self.id, text="Movie not found", subtext=stripped, iconUrls=self.iconUrls
+                            text="Movie not found",
+                            subtext=stripped,
+                            iconUrls=self.iconUrls,
                         )
                     )
         else:
             query.add(
                 StandardItem(
-                    id=self.id, text=self.name, subtext="Search for an existing movie on Radarr", iconUrls=self.iconUrls
+                    text=md_name,
+                    subtext="Search for an existing movie on Radarr",
+                    iconUrls=self.iconUrls,
                 )
             )
 
@@ -185,7 +204,6 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             subtext = movie.get("overview")
             imdb_url = "https://www.imdb.com/title/{}".format(movie.get("imdbId"))
             yield StandardItem(
-                id=self.id,
                 iconUrls=self.iconUrls,
                 text=title,
                 subtext=subtext or "",
@@ -193,7 +211,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     Action(
                         "monitor-search",
                         "Monitor + Search",
-                        lambda chosen_movie=movie: self.add_movie(chosen_movie, search=True),
+                        lambda chosen_movie=movie: self.add_movie(
+                            chosen_movie, search=True
+                        ),
                     ),
                     Action(
                         "monitor",
@@ -203,7 +223,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     Action(
                         "view",
                         "View on Radarr",
-                        lambda url=f"{self._instance_url}/add/new?term={title}": openUrl(url),
+                        lambda url=f"{self._instance_url}/add/new?term={title}": openUrl(
+                            url
+                        ),
                     ),
                     Action(
                         "imdb",
@@ -249,7 +271,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         response = requests.get(url, headers=self.headers)
         if response.ok:
             return (movie for movie in response.json())
-        warning(f"Got response {response.status_code} when attempting to fetch movie data")
+        warning(
+            f"Got response {response.status_code} when attempting to fetch movie data"
+        )
 
     def refresh_series(self):
         url = f"{self._instance_url}/api/v3/movie"
@@ -258,7 +282,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         if response.ok:
             return (movie for movie in response.json())
         else:
-            warning(f"Got response {response.status_code} when attempting to fetch existing movie data")
+            warning(
+                f"Got response {response.status_code} when attempting to fetch existing movie data"
+            )
 
     def add_movie(self, movie: Dict, search: bool = False) -> None:
         url = f"{self._instance_url}/api/v3/movie"
