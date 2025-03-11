@@ -12,8 +12,8 @@ from urllib import parse
 import requests
 from albert import *
 
-md_iid = "2.3"
-md_version = "1.3"
+md_iid = "3.0"
+md_version = "1.4"
 md_name = "Readarr"
 md_description = "Manage books/authors via a readarr instance"
 md_license = "MIT"
@@ -28,29 +28,29 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
     def __init__(self):
         PluginInstance.__init__(self)
-        TriggerQueryHandler.__init__(
-            self,
-            id=self.id,
-            name=self.name,
-            description=self.description,
-            synopsis="<author or book>",
-            defaultTrigger="readarr ",
-        )
+        TriggerQueryHandler.__init__(self)
 
-        self._instance_url = self.readConfig("instance_url", str) or "http://localhost:8787"
+        self._instance_url = (
+            self.readConfig("instance_url", str) or "http://localhost:8787"
+        )
         self._api_key = self.readConfig("api_key", str) or ""
 
         self._root_path = self.readConfig("root_path", str) or "/books"
         self._profile_id = self.readConfig("profile_id", int) or 1
         self._metadata_id = self.readConfig("metadata_id", int) or 1
         self._default_monitor = self.readConfig("default_monitor", bool) or True
-        self._delete_remove_files = self.readConfig("delete_remove_files", bool) or False
+        self._delete_remove_files = (
+            self.readConfig("delete_remove_files", bool) or False
+        )
 
         self.headers = {
             "User_Agent": self.user_agent,
             "X-Api-Key": self.api_key,
             "accept": "application/json",
         }
+
+    def defaultTrigger(self) -> str:
+        return "readarr "
 
     @property
     def instance_url(self):
@@ -127,8 +127,16 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             {"type": "lineedit", "property": "root_path", "label": "Root Path"},
             {"type": "spinbox", "property": "profile_id", "label": "Profile ID"},
             {"type": "spinbox", "property": "metadata_id", "label": "Metadata ID"},
-            {"type": "checkbox", "property": "default_monitor", "label": "Monitor by default"},
-            {"type": "checkbox", "property": "delete_remove_files", "label": "Delete removes files"},
+            {
+                "type": "checkbox",
+                "property": "default_monitor",
+                "label": "Monitor by default",
+            },
+            {
+                "type": "checkbox",
+                "property": "delete_remove_files",
+                "label": "Delete removes files",
+            },
         ]
 
     def handleTriggerQuery(self, query):
@@ -146,12 +154,11 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 if query_str:
                     data = self.author_lookup(query_str)
                     items = [item for item in self.gen_add_items(data)] if data else []
-                    if items:   
+                    if items:
                         query.add(items)
                     else:
                         query.add(
                             StandardItem(
-                                id=self.id,
                                 iconUrls=self.iconUrls,
                                 text=f"Search {query_str}",
                                 subtext="Search for authors/books on Readarr",
@@ -159,33 +166,45 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                                     Action(
                                         "search",
                                         "Search on Readarr",
-                                        lambda url=f"{self._instance_url}/add/search?term={query_str}": openUrl(url),
+                                        lambda url=f"{self._instance_url}/add/search?term={query_str}": openUrl(
+                                            url
+                                        ),
                                     ),
-                                ]
+                                ],
                             )
                         )
                 else:
                     query.add(
                         StandardItem(
-                            id=self.id, text=self.name, subtext="Add a new author on readarr", iconUrls=self.iconUrls
+                            text=md_name,
+                            subtext="Add a new author on readarr",
+                            iconUrls=self.iconUrls,
                         )
                     )
             else:
                 # Search existing series
-                data = (item for item in self.refresh_authors() or [] if stripped in item["authorName"].lower())
+                data = (
+                    item
+                    for item in self.refresh_authors() or []
+                    if stripped in item["authorName"].lower()
+                )
                 items = [item for item in self.gen_search_items(data)] if data else []
                 if items:
                     query.add(items)
                 else:
                     query.add(
                         StandardItem(
-                            id=self.id, text="Author not found", subtext=stripped, iconUrls=self.iconUrls
+                            text="Author not found",
+                            subtext=stripped,
+                            iconUrls=self.iconUrls,
                         )
                     )
         else:
             query.add(
                 StandardItem(
-                    id=self.id, text=self.name, subtext="Search for an existing author on readarr", iconUrls=self.iconUrls
+                    text=md_name,
+                    subtext="Search for an existing author on readarr",
+                    iconUrls=self.iconUrls,
                 )
             )
 
@@ -193,12 +212,16 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         for author in data:
             title = author["authorName"]
             status = author.get("status")
-            subtext = "{} - {}".format(status.capitalize() if status else "", author.get("overview"))
+            subtext = "{} - {}".format(
+                status.capitalize() if status else "", author.get("overview")
+            )
             actions = [
                 Action(
                     "monitor-search",
                     "Monitor + Search",
-                    lambda chosen_author=author: self.add_author(chosen_author, search=True),
+                    lambda chosen_author=author: self.add_author(
+                        chosen_author, search=True
+                    ),
                 ),
                 Action(
                     "monitor",
@@ -217,7 +240,12 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                         ),
                     )
 
-            yield StandardItem(id=self.id, iconUrls=self.iconUrls, text=title, subtext=subtext, actions=actions)
+            yield StandardItem(
+                iconUrls=self.iconUrls,
+                text=title,
+                subtext=subtext,
+                actions=actions,
+            )
 
     def gen_search_items(self, data: Iterator[dict]) -> Iterator[Item]:
         for author in data:
@@ -260,7 +288,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         response = requests.get(url, headers=self.headers)
         if response.ok:
             return (author for author in response.json())
-        warning(f"Got response {response.status_code} when attempting to fetch author data")
+        warning(
+            f"Got response {response.status_code} when attempting to fetch author data"
+        )
 
     def refresh_authors(self) -> Iterator[dict] | None:
         url = f"{self._instance_url}/api/v1/author"
@@ -269,7 +299,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         if response.ok:
             return (author for author in response.json())
         else:
-            warning(f"Got response {response.status_code} when attempting to fetch existing author data")
+            warning(
+                f"Got response {response.status_code} when attempting to fetch existing author data"
+            )
 
     def add_author(self, author: Dict, search: bool = False) -> None:
         url = f"{self._instance_url}/api/v1/author"
