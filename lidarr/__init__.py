@@ -12,8 +12,8 @@ from urllib import parse
 import requests
 from albert import *
 
-md_iid = "2.3"
-md_version = "2.3"
+md_iid = "3.0"
+md_version = "2.4"
 md_name = "Lidarr"
 md_description = "Manage music artists via a Lidarr instance"
 md_license = "MIT"
@@ -28,29 +28,29 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
     def __init__(self):
         PluginInstance.__init__(self)
-        TriggerQueryHandler.__init__(
-            self,
-            id=self.id,
-            name=self.name,
-            description=self.description,
-            synopsis="<artist>",
-            defaultTrigger="lidarr ",
-        )
+        TriggerQueryHandler.__init__(self)
 
-        self._instance_url = self.readConfig("instance_url", str) or "http://localhost:8686"
+        self._instance_url = (
+            self.readConfig("instance_url", str) or "http://localhost:8686"
+        )
         self._api_key = self.readConfig("api_key", str) or ""
 
         self._root_path = self.readConfig("root_path", str) or "/music"
         self._profile_id = self.readConfig("profile_id", int) or 1
         self._metadata_id = self.readConfig("metadata_id", int) or 1
         self._default_monitor = self.readConfig("default_monitor", bool) or True
-        self._delete_remove_files = self.readConfig("delete_remove_files", bool) or False
+        self._delete_remove_files = (
+            self.readConfig("delete_remove_files", bool) or False
+        )
 
         self.headers = {
             "User_Agent": self.user_agent,
             "X-Api-Key": self.api_key,
             "accept": "application/json",
         }
+
+    def defaultTrigger(self) -> str:
+        return "lidarr "
 
     @property
     def instance_url(self):
@@ -127,8 +127,16 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             {"type": "lineedit", "property": "root_path", "label": "Root Path"},
             {"type": "spinbox", "property": "profile_id", "label": "Profile ID"},
             {"type": "spinbox", "property": "metadata_id", "label": "Metadata ID"},
-            {"type": "checkbox", "property": "default_monitor", "label": "Monitor by default"},
-            {"type": "checkbox", "property": "delete_remove_files", "label": "Delete removes files"},
+            {
+                "type": "checkbox",
+                "property": "default_monitor",
+                "label": "Monitor by default",
+            },
+            {
+                "type": "checkbox",
+                "property": "delete_remove_files",
+                "label": "Delete removes files",
+            },
         ]
 
     def handleTriggerQuery(self, query):
@@ -146,12 +154,11 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 if query_str:
                     data = self.artist_lookup(query_str)
                     items = [item for item in self.gen_add_items(data)] if data else []
-                    if items:   
+                    if items:
                         query.add(items)
                     else:
                         query.add(
                             StandardItem(
-                                id=self.id,
                                 iconUrls=self.iconUrls,
                                 text=f"Search {query_str}",
                                 subtext="Search for artist on Lidarr",
@@ -159,33 +166,45 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                                     Action(
                                         "search",
                                         "Search on Lidarr",
-                                        lambda url=f"{self._instance_url}/add/search?term={query_str}": openUrl(url),
+                                        lambda url=f"{self._instance_url}/add/search?term={query_str}": openUrl(
+                                            url
+                                        ),
                                     ),
-                                ]
+                                ],
                             )
                         )
                 else:
                     query.add(
                         StandardItem(
-                            id=self.id, text=self.name, subtext="Add a new artist on Lidarr", iconUrls=self.iconUrls
+                            text=md_name,
+                            subtext="Add a new artist on Lidarr",
+                            iconUrls=self.iconUrls,
                         )
                     )
             else:
                 # Search existing artists
-                data = (item for item in self.refresh_artist() or [] if stripped in item["artistName"].lower())
+                data = (
+                    item
+                    for item in self.refresh_artist() or []
+                    if stripped in item["artistName"].lower()
+                )
                 items = [item for item in self.gen_search_items(data)] if data else []
                 if items:
                     query.add(items)
                 else:
                     query.add(
                         StandardItem(
-                            id=self.id, text="Artist not found", subtext=stripped, iconUrls=self.iconUrls
+                            text="Artist not found",
+                            subtext=stripped,
+                            iconUrls=self.iconUrls,
                         )
                     )
         else:
             query.add(
                 StandardItem(
-                    id=self.id, text=self.name, subtext="Search for an existing artist on Lidarr", iconUrls=self.iconUrls
+                    text=md_name,
+                    subtext="Search for an existing artist on Lidarr",
+                    iconUrls=self.iconUrls,
                 )
             )
 
@@ -193,7 +212,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         for artist in data:
             title = artist["artistName"]
             status = artist.get("status")
-            subtext = "{} - {}".format(artist.get("artistType"), status.capitalize() if status else "")
+            subtext = "{} - {}".format(
+                artist.get("artistType"), status.capitalize() if status else ""
+            )
             actions = [
                 Action(
                     "monitor",
@@ -203,12 +224,16 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 Action(
                     "monitor-search",
                     "Monitor + Search",
-                    lambda chosen_artist=artist: self.add_artist(chosen_artist, search_missing=True),
+                    lambda chosen_artist=artist: self.add_artist(
+                        chosen_artist, search_missing=True
+                    ),
                 ),
                 Action(
                     "open",
                     "View on Lidarr",
-                    lambda url=f"{self._instance_url}/add/new?term={title}": openUrl(url),
+                    lambda url=f"{self._instance_url}/add/new?term={title}": openUrl(
+                        url
+                    ),
                 ),
             ]
             for link in artist["links"]:
@@ -228,7 +253,12 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                             lambda url=link["url"]: openUrl(url),
                         ),
                     )
-            yield StandardItem(id=self.id, iconUrls=self.iconUrls, text=title, subtext=subtext, actions=actions)
+            yield StandardItem(
+                iconUrls=self.iconUrls,
+                text=title,
+                subtext=subtext,
+                actions=actions,
+            )
 
     def gen_search_items(self, data: Iterator[dict]) -> Iterator[Item]:
         for artist in data:
@@ -272,7 +302,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         response = requests.get(url, headers=self.headers)
         if response.ok:
             return (artist for artist in response.json())
-        warning(f"Got response {response.status_code} when attempting to fetch artist data")
+        warning(
+            f"Got response {response.status_code} when attempting to fetch artist data"
+        )
 
     def refresh_artist(self) -> Iterator[dict] | None:
         url = f"{self._instance_url}/api/v1/artist"
@@ -280,7 +312,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         if response.ok:
             return (series for series in response.json())
         else:
-            warning(f"Got response {response.status_code} when attempting to fetch artist data")
+            warning(
+                f"Got response {response.status_code} when attempting to fetch artist data"
+            )
 
     def add_artist(self, artist: Dict, search_missing: bool = False) -> None:
         url = f"{self._instance_url}/api/v1/artist"
