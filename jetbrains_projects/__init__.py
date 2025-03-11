@@ -5,6 +5,7 @@
 """
 This plugin allows you to quickly open projects of the Jetbrains IDEs
 
+- Aqua
 - Android Studio
 - CLion
 - DataGrip
@@ -15,7 +16,8 @@ This plugin allows you to quickly open projects of the Jetbrains IDEs
 - PyCharm
 - Rider
 - RubyMine
-- WebStorm.
+- WebStorm
+- Writerside.
 
 Note that for this plugin to find the IDEs, a commandline launcher in $PATH is required.
 Open the IDE and click Tools -> Create Command-line Launcher to add one.
@@ -25,19 +27,19 @@ Disclaimer: This plugin has no affiliation with JetBrains s.r.o.. The icons are 
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union
+from typing import Union, List
 from shutil import which
 from sys import platform
 from xml.etree import ElementTree
 from albert import *
 
-md_iid = '2.3'
-md_version = "1.10"
+md_iid = "3.0"
+md_version = "3.0"
 md_name = "Jetbrains projects"
 md_description = "Open your JetBrains projects"
 md_license = "MIT"
 md_url = "https://github.com/albertlauncher/python/tree/main/jetbrains_projects"
-md_authors = ["@tomsquest", "@vmaerten", "@manuelschneid3r"]
+md_authors = ["@tomsquest", "@vmaerten", "@manuelschneid3r", "@d3v2a"]
 
 
 @dataclass
@@ -54,19 +56,30 @@ class Editor:
     config_dir_prefix: str
     binary: str
 
-    def __init__(self, name: str, icon: Path, config_dir_prefix: str, binaries: list[str]):
+    # Rider calls recentProjects.xml -> recentSolutions.xml and in it RecentProjectsManager -> RiderRecentProjectsManager
+    is_rider: bool
+
+    def __init__(
+            self,
+            name: str,
+            icon: Path,
+            config_dir_prefix: str,
+            binaries: list[str],
+            is_rider = False):
         self.name = name
         self.icon = icon
         self.config_dir_prefix = config_dir_prefix
         self.binary = self._find_binary(binaries)
+        self.is_rider = is_rider
 
-    def _find_binary(self, binaries: list[str]) -> Union[str, None]:
+    @staticmethod
+    def _find_binary(binaries: list[str]) -> Union[str, None]:
         for binary in binaries:
             if which(binary):
                 return binary
         return None
 
-    def list_projects(self) -> list[Project]:
+    def list_projects(self) -> List[Project]:
         config_dir = Path.home() / ".config"
         if platform == "darwin":
             config_dir = Path.home() / "Library" / "Application Support"
@@ -75,24 +88,39 @@ class Editor:
         if not dirs:
             return []
         latest = sorted(dirs)[-1]
-        return self._parse_recent_projects(Path(latest) / "options" / "recentProjects.xml")
+        if not self.is_rider:
+            recent_projects_xml = "recentProjects.xml"
+        else:
+            recent_projects_xml = "recentSolutions.xml"
+        return self._parse_recent_projects(Path(latest) / "options" / recent_projects_xml)
 
-    def _parse_recent_projects(self, recent_projects_file: Path) -> list[Project]:
+    @staticmethod
+    def _parse_recent_projects(recent_projects_file: Path) -> list[Project]:
         try:
             root = ElementTree.parse(recent_projects_file).getroot()
-            entries = root.findall(".//component[@name='RecentProjectsManager']//entry[@key]")
+            if not self.is_rider:
+                entries = root.findall(".//component[@name='RecentProjectsManager']//entry[@key]")
+            else:
+                entries = root.findall(".//component[@name='RiderRecentProjectsManager']//entry[@key]")
 
             projects = []
             for entry in entries:
-                project_path = entry.attrib["key"].replace("$USER_HOME$", str(Path.home()))
-
+                project_path = entry.attrib["key"]
+                project_path = project_path.replace("$USER_HOME$", str(Path.home()))
+                project_name = Path(project_path).name
+                files = Path(project_path + "/.idea").glob("*.iml")
                 tag_opened = entry.find(".//option[@name='projectOpenTimestamp']")
                 last_opened = tag_opened.attrib["value"] if tag_opened is not None and "value" in tag_opened.attrib else None
 
                 if project_path and last_opened:
                     projects.append(
-                        Project(name=Path(project_path).name, path=project_path, last_opened=int(last_opened))
+                        Project(name=project_name, path=project_path, last_opened=int(last_opened))
                     )
+                for file in files:
+                    name = file.name.replace(".iml", "")
+                    if name != project_name:
+                        projects.append(Project(name=name, path=project_path, last_opened=int(last_opened)))
+
             return projects
         except (ElementTree.ParseError, FileNotFoundError):
             return []
@@ -104,10 +132,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
     def __init__(self):
         PluginInstance.__init__(self)
-        TriggerQueryHandler.__init__(
-            self, self.id, self.name, self.description,
-            defaultTrigger='jb '
-        )
+        TriggerQueryHandler.__init__(self)
+
+        self.fuzzy = False
 
         plugin_dir = Path(__file__).parent
         editors = [
@@ -117,6 +144,11 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 config_dir_prefix="Google/AndroidStudio",
                 binaries=["studio", "androidstudio", "android-studio", "android-studio-canary", "jdk-android-studio",
                           "android-studio-system-jdk"]),
+            Editor(
+                name="Aqua",
+                icon=plugin_dir / "icons" / "aqua.svg",
+                config_dir_prefix="JetBrains/Aqua",
+                binaries=["aqua", "aqua-eap"]),
             Editor(
                 name="CLion",
                 icon=plugin_dir / "icons" / "clion.svg",
@@ -158,7 +190,8 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 name="Rider",
                 icon=plugin_dir / "icons" / "rider.svg",
                 config_dir_prefix="JetBrains/Rider",
-                binaries=["rider", "rider-eap"]),
+                binaries=["rider", "rider-eap"],
+                is_rider=True),
             Editor(
                 name="RubyMine",
                 icon=plugin_dir / "icons" / "rubymine.svg",
@@ -174,23 +207,40 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 icon=plugin_dir / "icons" / "rustrover.svg",
                 config_dir_prefix="JetBrains/RustRover",
                 binaries=["rustrover", "rustrover-eap"]),
+            Editor(
+                name="Writerside",
+                icon=plugin_dir / "icons" / "writerside.svg",
+                config_dir_prefix="JetBrains/Writerside",
+                binaries=["writerside", "writerside-eap"]),
         ]
         self.editors = [e for e in editors if e.binary is not None]
 
+    def supportsFuzzyMatching(self):
+        return True
+
+    def setFuzzyMatching(self, enabled):
+        self.fuzzy = enabled
+
+    def defaultTrigger(self):
+        return "jb "
+
     def handleTriggerQuery(self, query: Query):
         editor_project_pairs = []
+
+        m = Matcher(query.string, MatchConfig(fuzzy=self.fuzzy))
+
         for editor in self.editors:
-            projects = editor.list_projects()
-            projects = [p for p in projects if Path(p.path).exists()]
-            projects = [p for p in projects if query.string.lower() in p.name.lower()]
-            editor_project_pairs.extend([(editor, p) for p in projects])
+            for project in editor.list_projects():
+                if Path(project.path).exists() and m.match(project.name, project.path):
+                    editor_project_pairs.append((editor, project))
 
         # sort by last opened
         editor_project_pairs.sort(key=lambda pair: pair[1].last_opened, reverse=True)
 
         query.add([self._make_item(editor, project, query) for editor, project in editor_project_pairs])
 
-    def _make_item(self, editor: Editor, project: Project, query: Query) -> Item:
+    @staticmethod
+    def _make_item(editor: Editor, project: Project, query: Query) -> Item:
         return StandardItem(
             id="%s-%s-%s" % (editor.binary, project.path, project.last_opened),
             text=project.name,

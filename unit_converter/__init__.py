@@ -12,15 +12,12 @@ Usage examples:
 - `convert 100 USD to EUR`
 """
 
-
-from __future__ import annotations
-
 import json
 import re
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -28,12 +25,12 @@ import inflect
 import pint
 from albert import *
 
-md_iid = "2.3"
-md_version = "1.6"
+md_iid = "3.0"
+md_version = "1.8"
 md_name = "Unit Converter"
 md_description = "Convert between units"
 md_license = "MIT"
-md_url = "https://github.com/albertlauncher/python"
+md_url = "https://github.com/albertlauncher/python/tree/main/unit_converter"
 md_lib_dependencies = ["pint", "inflect"]
 md_authors = ["@DenverCoder1", "@Pete-Hamlin"]
 
@@ -96,7 +93,8 @@ class ConversionResult:
         unit = self.__pluralize_unit(unit) if amount != 1 else unit
         return self.display_names.get(unit, unit)
 
-    def __format_float(self, num: float) -> str:
+    @staticmethod
+    def __format_float(num: float) -> str:
         """Format a float to remove trailing zeros and avoid scientific notation
 
         Args:
@@ -128,7 +126,7 @@ class ConversionResult:
     def icon(self) -> str:
         """Return the icon for the result's dimensionality"""
         # strip characters from the dimensionality if not alphanumeric or underscore
-        dimensionality = re.sub(r"[^\w]", "", self.dimensionality)
+        dimensionality = re.sub(r"\W", "", self.dimensionality)
         return f"{dimensionality}.svg"
 
     def __repr__(self):
@@ -257,7 +255,7 @@ class CurrencyConverter(UnitConverter):
             warning(f"Error getting currencies: {error}")
             return {}
 
-    def get_currency(self, currency: str) -> str | None:
+    def get_currency(self, currency: str) -> Optional[str]:
         """Get the currency name normalized using aliases and capitalization
 
         Args:
@@ -347,14 +345,7 @@ class Plugin(PluginInstance, GlobalQueryHandler):
 
     def __init__(self):
         PluginInstance.__init__(self)
-        GlobalQueryHandler.__init__(
-            self,
-            id=self.id ,
-            name=self.name,
-            description=self.description,
-            synopsis="<amount> <from_unit> to <to_unit>",
-            defaultTrigger="convert ",
-        )
+        GlobalQueryHandler.__init__(self)
 
         self.unit_convert_regex = re.compile(
             r"(?P<from_amount>-?\d+\.?\d*)\s?(?P<from_unit>.*)\s(?:to|in)\s(?P<to_unit>.*)",
@@ -363,16 +354,19 @@ class Plugin(PluginInstance, GlobalQueryHandler):
         self.unit_converter = StandardUnitConverter()
         self.currency_converter = CurrencyConverter()
 
+    def defaultTrigger(self):
+        return "convert "
+
+    def synopsis(self, query):
+        return "<amount> <from_unit> to <to_unit>"
+
     def handleTriggerQuery(self, query: Query) -> None:
-        query_string = query.string.strip()
-        if query_string:
+        if query_string := query.string.strip():
             items = self.match_query(query_string)
             query.add(items)
 
     def handleGlobalQuery(self, query):
-        query_string = query.string.strip()
-        items = [RankItem(item=item, score=1) for item in self.match_query(query_string)]
-        return items
+        return [RankItem(item=item, score=1) for item in self.match_query(query.string.strip())]
 
     def match_query(self, query_string: str):
         match = self.unit_convert_regex.fullmatch(query_string)
@@ -390,7 +384,8 @@ class Plugin(PluginInstance, GlobalQueryHandler):
                 info("Something went wrong. Make sure you're using the correct format.")
         return []
 
-    def _create_item(self, text: str, subtext: str, icon: str = "") -> Item:
+    @staticmethod
+    def _create_item(text: str, subtext: str, icon: str = "") -> Item:
         """Create an Item from a text and subtext
 
         Args:
