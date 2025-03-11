@@ -13,8 +13,8 @@ from urllib import parse
 import requests
 from albert import *
 
-md_iid = "2.3"
-md_version = "2.2"
+md_iid = "3.0"
+md_version = "2.3"
 md_name = "Sonarr"
 md_description = "Manage TV series via a Sonarr instance"
 md_license = "MIT"
@@ -29,14 +29,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
     def __init__(self):
         PluginInstance.__init__(self)
-        TriggerQueryHandler.__init__(
-            self,
-            id=self.id,
-            name=self.name,
-            description=self.description,
-            synopsis="<series-title>",
-            defaultTrigger="sonarr ",
-        )
+        TriggerQueryHandler.__init__(self)
 
         self._instance_url = self.readConfig("instance_url", str) or "http://localhost:8989"
         self._api_key = self.readConfig("api_key", str) or ""
@@ -51,6 +44,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             "X-Api-Key": self.api_key,
             "accept": "application/json",
         }
+
+    def defaultTrigger(self):
+        return "sonarr "
 
     @property
     def instance_url(self):
@@ -141,7 +137,6 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     else:
                         query.add(
                             StandardItem(
-                                id=self.id,
                                 iconUrls=self.iconUrls,
                                 text=f"Search {query_str}",
                                 subtext="Search for series on Sonarr",
@@ -169,13 +164,13 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 else:
                     query.add(
                         StandardItem(
-                            id=self.id, text="Series not found", subtext=stripped, iconUrls=self.iconUrls
+                             text="Series not found", subtext=stripped, iconUrls=self.iconUrls
                         )
                     )
         else:
             query.add(
                 StandardItem(
-                    id=self.id, text=self.name, subtext="Search for an existing series on Sonarr", iconUrls=self.iconUrls
+                     text=md_name, subtext="Search for an existing series on Sonarr", iconUrls=self.iconUrls
                 )
             )
 
@@ -185,7 +180,6 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             subtext = "{}: {}".format(series.get("network"), series.get("overview"))
             imdb_url = "https://www.imdb.com/title/{}".format(series.get("imdbId"))
             yield StandardItem(
-                id=self.id,
                 iconUrls=self.iconUrls,
                 text=title,
                 subtext=subtext,
@@ -212,9 +206,9 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         for series in data:
             title = "{} ({})".format(series["title"], series["year"])
             url = "{}/series/{}".format(self._instance_url, series["id"])
-            seasons = len(series["seasons"])
-            episodes = series["episodeFileCount"]
-            total_episodes = series["episodeCount"]
+            seasons = series["statistics"]["seasonCount"]
+            episodes = series["statistics"]["episodeFileCount"]
+            total_episodes = series["statistics"]["episodeCount"]
             missing = total_episodes - episodes
             subtext = f"{seasons} Seasons: {episodes} Episodes"
             if missing:
